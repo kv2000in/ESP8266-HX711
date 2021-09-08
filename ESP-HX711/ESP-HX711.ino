@@ -36,7 +36,8 @@ WebSocketsServer webSocket = WebSocketsServer(8000);
 // HX711 circuit wiring
 const int LOADCELL_DOUT_PIN = 4; //Hardwired
 const int LOADCELL_SCK_PIN = 5; //Hardwired
-
+//const float calibrationFactor=226.626;
+const float calibrationFactor=1;
 unsigned long previousMillis = 0;     
 long timeoutinterval = 1500; 
 
@@ -181,6 +182,9 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
             <br><br><br>    
             <button class="mybuttons" id="tareScale" onclick='tareScale()'>Tare
         </button>
+             <br><br><br>    
+            <button class="mybuttons" id="calibrateScale" onclick='calibrateScale()'>Calibrate
+        </button>
             </div>
         <button class = "col-3 mybuttons" id ="serialConsole"></button>
   </body>
@@ -202,6 +206,10 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
   
   
   var websock;
+    var calibrationFactor = 1;
+    function calibrateScale(){
+        calibrationFactor= prompt("Calibration Factor", calibrationFactor);
+    }
   var iswebsocketconnected = false;
   function doConnect() {
       // websock = new WebSocket('ws://' + window.location.hostname + ':8000/');
@@ -227,7 +235,7 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
       websock.onmessage = function(evt) {
           //console.log(evt); 
           console.log(evt.data);
-          document.getElementById("serialConsole").innerHTML=evt.data;
+          document.getElementById("serialConsole").innerHTML=Math.round(evt.data*calibrationFactor);
           }
             //parse_incoming_websocket_messages(evt.data);
         }
@@ -251,7 +259,6 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
   }
   </script>
 </html>
-
 
 
 )rawliteral";
@@ -456,7 +463,7 @@ previousMillis = currentMillis;
 if (scale.is_ready()) {
 
 
-float reading = scale.get_units(10); //With scale.set_scale(226.626) - this gives accurate up to 1 deca gram (10 grams). 500 gram water bottle values are 50.07 to 50.32
+float reading = (scale.get_units(10))*calibrationFactor; //With scale.set_scale(226.626) - this gives accurate up to 1 deca gram (10 grams). 500 gram water bottle values are 50.07 to 50.32
 //float readinginGs = reading*10;
 ////float readinginKGs = round(readinginGs/1000); 
 //float readinginLBs = readinginGs/453.592;// 4545

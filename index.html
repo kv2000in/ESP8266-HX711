@@ -102,6 +102,9 @@
             <br><br><br>    
             <button class="mybuttons" id="tareScale" onclick='tareScale()'>Tare
 				</button>
+             <br><br><br>    
+            <button class="mybuttons" id="calibrateScale" onclick='calibrateScale()'>Calibrate
+				</button>
             </div>
         <button class = "col-3 mybuttons" id ="serialConsole"></button>
 	</body>
@@ -123,6 +126,10 @@
 	
 	
 	var websock;
+    var calibrationFactor = 1;
+    function calibrateScale(){
+        calibrationFactor= prompt("Calibration Factor", calibrationFactor);
+    }
 	var iswebsocketconnected = false;
 	function doConnect() {
 			// websock = new WebSocket('ws://' + window.location.hostname + ':8000/');
@@ -148,7 +155,7 @@
 			websock.onmessage = function(evt) {
 					//console.log(evt); 
 					console.log(evt.data);
-					document.getElementById("serialConsole").innerHTML=evt.data;
+					document.getElementById("serialConsole").innerHTML=Math.round(evt.data*calibrationFactor);
 					}
 						//parse_incoming_websocket_messages(evt.data);
         }
