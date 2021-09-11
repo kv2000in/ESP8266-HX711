@@ -20,6 +20,7 @@ Adjust the parameter in step 4 until you get an accurate reading.
 #include <ESP8266WebServer.h>
 #include <string.h>
 #include <ArduinoOTA.h>
+#include <ESP8266HTTPUpdateServer.h>
 
 #ifndef APSSID
 #define APSSID "myScale1"
@@ -31,7 +32,7 @@ const char *password = APPSK;
 String mystring;
 ESP8266WebServer server(80);
 WebSocketsServer webSocket = WebSocketsServer(8000);
-
+ESP8266HTTPUpdateServer httpUpdater;
 
 // HX711 circuit wiring
 const int LOADCELL_DOUT_PIN = 4; //Hardwired
@@ -384,6 +385,12 @@ Serial1.println(ssid);
 Serial1.print("IP address: ");
 Serial1.println(WiFi.localIP());
 */
+/******Web Updater via browser*****/
+httpUpdater.setup(&server);
+Serial.print("HTTPUpdateServer ready! Open http://");
+Serial.print(myIP);
+Serial.println("/update in your browser");
+/**** end web updater************/
 /**********************************************/
 
 server.on("/", handleRoot);
