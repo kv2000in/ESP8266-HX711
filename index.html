@@ -1,182 +1,184 @@
+
 <!DOCTYPE html>
 <html>
 	<head>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0">
-			<link rel="manifest" href="manifest.json">
-				<style>
-					/*        disable scrolling    */
-					html {
-						margin: 0;
-						padding: 0;
-						overflow: hidden;
-					}
-				
-				body {
-					position: absolute;
-					width: 100%;
-					height: 100%;
-					overflow: auto;
-					margin: 0px;
-					
-				}
-				
-				* {
-					margin: 0;
-					padding: 0;
-					box-sizing: border-box;
-				}
-				
-				
-				@media only screen and (max-height: 444px) {
-					.horizontalslider {
-						position: relative;
-						height: 10%;
-					}
-				}
-				
-                  
-				
-                    .mybuttons {
-  display: inline-block;
-  padding: 15px 25px;
-  font-size: 24px;
-  cursor: pointer;
-  text-align: center;
-  text-decoration: none;
-  outline: none;
-  color: #fff;
-  background-color: #4CAF50;
-  border: none;
-  border-radius: 15px;
-  box-shadow: 0 9px #999;
-}
-
-.mybuttons:hover {background-color: #3e8e41}
-
-.mybuttons:active {
-  background-color: #3e8e41;
-  box-shadow: 0 5px #666;
-  transform: translateY(4px);
-}
-				.col-1 {
-					position: absolute;
-					width: 24%;
-					right: 75%
-				}
-				
-				.col-2 {
-					position: absolute;
-					width: 46%;
-					right: 38%;
-				}
-				
-				.col-3 {
-					position: absolute;
-					width: 38%;
-					right: 0;
-				}
-				#websocketstatus[type="radio"]:disabled {
-					
-					color: aqua;
-					background-color: aqua;
-					border-color: aquamarine;
-					
-					
-				}
+		<meta name = "viewport" content = "width = device-width, initial-scale = 1.0, maximum-scale = 1.0, user-scalable=0">
+			<title>Transducer Height Project</title>
+			<style>
+				"body { background-color: #808080; font-family: Arial, Helvetica, Sans-Serif; Color: #000000; }"
 				</style>
-				<title>myScale1</title>
-				</head>
-	<body>
-        <div class = "col-1">
-		<label for="websocketstatus">Connected</label>
-            <input type="radio" id="websocketstatus" disabled>
-        <br><br><br>
-        <button class="mybuttons" id="connectWS" onclick='doConnect()'>Connect
-				</button>
-            <br><br><br>
-                    <button class="mybuttons" id="closeWS" onclick='doClose()'>Close
-				</button>
-            <br><br><br>    
-            <button class="mybuttons" id="reloadfromsource" onclick='location.reload()'>Reload
-				</button>
-            <br><br><br>    
-            <button class="mybuttons" id="tareScale" onclick='tareScale()'>Tare
-				</button>
-             <br><br><br>    
-            <button class="mybuttons" id="calibrateScale" onclick='calibrateScale()'>Calibrate
-				</button>
-            </div>
-        <button class = "col-3 mybuttons" id ="serialConsole"></button>
-	</body>
-	<script>
-		
-		
-	function tareScale(){
-        doSend("tare");
-    }
-	function handlewebsocketstatus(){
-		if (iswebsocketconnected){
-			document.getElementById("websocketstatus").checked=true;
-		}
-		else
-		{
-			document.getElementById("websocketstatus").checked=false;
-		}
-	}       
-	
-	
-	var websock;
-    var calibrationFactor = 1;
-    function calibrateScale(){
-        calibrationFactor= prompt("Calibration Factor", calibrationFactor);
-    }
-	var iswebsocketconnected = false;
-	function doConnect() {
-			// websock = new WebSocket('ws://' + window.location.hostname + ':8000/');
-			websock = new WebSocket('ws://192.168.4.1:8000/');
-    
-			websock.onopen = function(evt) {
-				console.log('websock open');
-				iswebsocketconnected = true;
-				handlewebsocketstatus();
+			<style>
+				.ledon {
+					align-items: flex-start;
+					text-align: center;
+					cursor: default;
+					color: buttontext;
+					background-color: buttonface;
+					box-sizing: border-box;
+					padding: 2px 6px 3px;
+					border-width: 2px;
+					border-style: outset;
+					border-color: buttonface;
+					border-image: initial;
+					text-rendering: auto;
+					color: initial;
+					letter-spacing: normal;
+					word-spacing: normal;
+					text-transform: none;
+					text-indent: 0px;
+					text-shadow: none;
+					display: inline-block;
+					text-align: start;
+					margin: 0em;
+					font: 11px system-ui;
+					
+				}
+			
+			.ledoff {
+				background-color: #1ded4d;
 				
+			}
+			</style>
+			<script>
+				var websock;
+				var boolClientactive;
+				var boolHasZeroBeenDone = false;
+				
+				function start() {
+					websock = new WebSocket('ws://' + window.location.hostname + ':81/');
+					websock.onopen = function(evt) { console.log('websock open');
+						
+						fnButton('RUSAVING');
+						
+					};
+					websock.onclose = function(evt) { console.log('websock close'); };
+					websock.onerror = function(evt) { console.log(evt); };
+					websock.onmessage = function(evt) {
+						console.log(evt);
+						console.log(evt.data.slice(0,1));
+						if (evt.data.slice(0,1)=="T"){
+							
+							
+							document.getElementById("tspanDistance1").textContent = evt.data.slice(1);
+								//btnserverblink.style.background="red";
+								blinkled("server");
+						}
+						
+						else if (evt.data.slice(0,1)=="Y"){
+							
+							/*Server is currently saving*/
+							document.getElementById("btSTARTSAVE").disabled=true;
+							document.getElementById("btZERO").disabled=true;
+							document.getElementById("btSTOPSAVE").disabled=false;
+						}
+						
+						else if (evt.data.slice(0,1)=="N"){
+							/*Server is currently not saving*/
+							/*Send time stamp */
+							sendTimestamp();
+							document.getElementById("btSTARTSAVE").disabled=false;
+							document.getElementById("btZERO").disabled=false;
+							document.getElementById("btSTOPSAVE").disabled=true;
+						}
+						else {
+							document.getElementById("tspanDistance2").textContent = evt.data;
+							boolClientactive = true;
+								//var checkledstatus = document.getElementById("clientblink").attributes[0].value;
+								
+								blinkled("client");
+						}
+					};
+					
+					
+				}
+			
+			function blinkled(led){
+				
+				var el=  document.getElementById(led+"blink");
+				
+				el.classList.toggle("ledoff");
+			}
+			function doSend(message)
+			{
+				console.log("sent: " + message + '\n');
+				/* writeToScreen("sent: " + message + '\n'); */
+				websock.send(message);
+			}
+			function fnButton(com){
+				
+				doSend("COMMAND-"+com);
+				
+			};
+			function download(file){
+				
+				
+			}
+			function zero(){
+				if (boolClientactive){
+					fnButton('ZERO');
+					boolHasZeroBeenDone = true; 
+				}
+				else {
+					alert("No client data - ?Client not connected"); 
+				}
 			}
 			
-			websock.onclose = function(evt) {
-				iswebsocketconnected = false;
-				console.log('websock close');
-				handlewebsocketstatus();
-					//clear all the intervals - doesn't work. still dealing with "ghost" setIntervals
-					
-			}
-			websock.onerror = function(evt) {
-				console.log(evt);
-			}
-			websock.onmessage = function(evt) {
-					//console.log(evt); 
-					console.log(evt.data);
-					document.getElementById("serialConsole").innerHTML=Math.round(evt.data*calibrationFactor);
+			function startsave()
+			{
+				if(boolHasZeroBeenDone){
+					var decision = confirm("This will overwrite previous data.\n Press OK to proceed, Cancel to abort and Download data");
+					if (decision){
+						
+						fnButton('STARTSAVE');
+						/*Disable start save button and enable stop save button
+						 Ideally - server should send whether it is currently saving data or not
+						 */
+						document.getElementById("btSTARTSAVE").disabled=true;
+						document.getElementById("btZERO").disabled=true;
+						document.getElementById("btSTOPSAVE").disabled=false;
+					} else {
+						/*user selected cancel - let's redirect user to download the data*/
+						
 					}
-						//parse_incoming_websocket_messages(evt.data);
-        }
-	
-	function doClose() {
-			//detach steering servo
-				//attachordetachservos("w","d");
-				
-				websock.close();
-	}
-	function doSend(message) {
-		if (iswebsocketconnected == true) {
-			if (websock.readyState == websock.OPEN) {
-				websock.send(message);
-					//console.log(message);
-			} else {
-				
-				console.log("websocket is in an indeterminate state");
+				} else { alert("Set Zero Before Saving")}
 			}
-		}
-	}
-	</script>
+			function stopsave(){
+				
+				fnButton('STOPSAVE');
+				document.getElementById("btSTARTSAVE").disabled=false;
+				document.getElementById("btZERO").disabled=false;
+				document.getElementById("btSTOPSAVE").disabled=true;
+			}
+			function sendTimestamp(){
+				
+				/*Send timestamp in milliseconds when connected */
+				var d = new Date();
+				var n = (d.getTime()/1000);
+				doSend("TIME-"+n);
+			}
+			</script>
+	</head>
+	<body onpageshow="javascript:start();">
+		
+		<div><b>Height of Server</b></div> 
+		
+		<strong><tspan  id="tspanDistance1">0</tspan> <text> &nbsp;(cm)</text>
+		</strong> <button class = "ledon" id ="serverblink"></button>
+		<div><b>Height of Client</b></div>
+		
+		<strong><tspan  id="tspanDistance2">0</tspan> <text> &nbsp;(cm)</text>
+		</strong> <button class = "ledon" id ="clientblink"></button> 
+		<br>
+		<button id = "btZERO" onclick="zero();">SET ZERO</button>
+		<button id = "btSTARTSAVE" onclick="startsave();">Start Save</button>
+		<button id = "btSTOPSAVE" onclick="stopsave();">Stop Save</button>
+		<br><br><br>
+		<a href="/Data.txt">Download Data</a>
+		<br><br>
+		<a href="/Zero.txt">Download Zero File</a>
+		<br><br>
+		<button id = "btCLOSEWS" onclick="websock.close();">Close Websocket</button>
+		
+	</body>
+	
 </html>
-
