@@ -37,6 +37,7 @@ Sort out tare, what to store, taring/zeroing etc.
 
 #define MAX_STRING_LEN  32
 struct station_info *stat_info;
+struct ip4_addr *IPaddress;
 IPAddress address;
 
 WiFiEventHandler stationConnectedHandler;
@@ -281,7 +282,6 @@ return fs_info.usedBytes/fs_info.totalBytes;
   
   }
 
-
 void onStationConnected(const WiFiEventSoftAPModeStationConnected& evt) {
   Serial.print("Station connected: ");
   Serial.println(macToString(evt.mac));
@@ -291,6 +291,9 @@ void onStationDisconnected(const WiFiEventSoftAPModeStationDisconnected& evt) {
   Serial.print("Station disconnected: ");
   Serial.println(macToString(evt.mac));
 }
+
+
+
 String macToString(const unsigned char* mac) {
   char buf[20];
   snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -323,11 +326,11 @@ void setup()
   Serial.print("AP IP address: ");
  Serial.println(myIP);
 
-// Call "onStationConnected" each time a station connects
+
+  // Call "onStationConnected" each time a station connects
   stationConnectedHandler = WiFi.onSoftAPModeStationConnected(&onStationConnected);
   // Call "onStationDisconnected" each time a station disconnects
   stationDisconnectedHandler = WiFi.onSoftAPModeStationDisconnected(&onStationDisconnected);
-  
   
   server.on("/", handleRoot);
   //server.onNotFound(handleNotFound);
@@ -399,18 +402,23 @@ void handletcpclient(){
   {
     Serial.println("\n[Client connected]");
     stat_info = wifi_softap_get_station_info();
+    IPaddress = &stat_info->ip;
+    address = IPaddress->addr;
     Serial.print("Client IP Address = ");
     Serial.print(address);
     Serial.println();
     Serial.print("Client MAC Address = ");
-    Serial.print(stat_info->bssid[0],HEX);
+    Serial.print(stat_info->bssid[3],HEX);
+    Serial.print(stat_info->bssid[4],HEX);
+    Serial.print(stat_info->bssid[5],HEX);
+    //macToString(stat_infobssid);
     while (client.connected())
     {
       // read line by line what the client (web browser) is requesting
       if (client.available())
       {
         line = client.readStringUntil('\0');
-        Serial.print(line);
+        
         
       }
     }
@@ -425,7 +433,8 @@ void handletcpclient(){
 
     // close the connection:
     client.stop();
-    Serial.println("[Client disconnected]");
+    Serial.print(line);
+    //Serial.println("[Client disconnected]");
   }
   //webSocket.broadcastTXT(line, line.length());
 }
