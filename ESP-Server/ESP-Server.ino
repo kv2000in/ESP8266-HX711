@@ -34,6 +34,26 @@ Sort out tare, what to store, taring/zeroing etc.
 #include "FS.h"
 #include <ArduinoOTA.h>
 #include <string.h>
+#include <espnow.h>
+typedef struct message {
+   int red;
+   int green;
+   int blue;
+} message;
+message myMessage;
+void onDataReceiver(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
+   Serial.println("Message received.");
+   // We don't use mac to verify the sender
+   // Let us transform the incomingData into our message structure
+  memcpy(&myMessage, incomingData, sizeof(myMessage));
+  Serial.print("Red:");
+  Serial.println(myMessage.red); 
+  Serial.print("Green:");
+  Serial.println(myMessage.green);
+  Serial.print("Blue:");
+  Serial.println(myMessage.blue);
+}
+
 
 #define MAX_STRING_LEN  32
 struct station_info *stat_info;
@@ -320,17 +340,27 @@ void setup()
   }
 
   Serial.print("Configuring access point...");
-  WiFi.softAP(ssid, password);
+  WiFi.softAP(ssid, password,1);
 
   IPAddress myIP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
  Serial.println(myIP);
-
+Serial.printf("MAC address = %s\n", WiFi.softAPmacAddress().c_str());
 
   // Call "onStationConnected" each time a station connects
   stationConnectedHandler = WiFi.onSoftAPModeStationConnected(&onStationConnected);
   // Call "onStationDisconnected" each time a station disconnects
   stationDisconnectedHandler = WiFi.onSoftAPModeStationDisconnected(&onStationDisconnected);
+  // Initializing the ESP-NOW
+  if (esp_now_init() != 0) {
+    Serial.println("Problem during ESP-NOW init");
+    return;
+  }
+  
+  //esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
+  // We can register the receiver callback function
+  esp_now_register_recv_cb(onDataReceiver);
+  
   
   server.on("/", handleRoot);
   //server.onNotFound(handleNotFound);

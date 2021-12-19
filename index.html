@@ -159,9 +159,22 @@
 			</script>
 	</head>
 	<body onpageshow="javascript:start();">
-		
-		<div><b>Height of Server</b></div> 
-		
+		<!--
+Server keeps the calibration data (based on MAC addresses)
+Server keeps track of raw values at the time of Tare
+Server returns data as 
+
+
+-->
+        
+		<div><b>Digital Scale Server</b></div> 
+		<label>Available Scales</label><list id = "listofsensornodes">
+        
+        <button>Assign</button>
+        <button>Zero</button>
+        <button>Plot</button>
+        <Label>Value since zero</Label> <input>
+        </list>
 		<strong><tspan  id="tspanDistance1">0</tspan> <text> &nbsp;(cm)</text>
 		</strong> <button class = "ledon" id ="serverblink"></button>
 		<div><b>Height of Client</b></div>

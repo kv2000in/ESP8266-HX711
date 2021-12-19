@@ -34,7 +34,7 @@ int R1=22;//22k
 int R2=10;//10k
 
 String mystring;
-bool DEBUG = false;
+bool DEBUG = true;
 
 // HX711 circuit wiring
 const int LOADCELL_DOUT_PIN = 4; //Hardwired
@@ -138,7 +138,7 @@ scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
 //scale.set_scale(211.8*10.7);                      // this value is obtained by calibrating the scale with known weights; see above and the https://github.com/bogde/HX711 README for details
 scale.power_up();
 delay(20);
-scale.set_scale(); 
+scale.set_scale(226.626); 
 //scale.tare(); if tare after each wake up - will always output zero
 if (DEBUG){Serial.println("Scale Set");}
 
