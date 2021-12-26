@@ -25,8 +25,7 @@ HX711 scale;
 int R1=22;//22k
 int R2=10;//10k
 
-bool DEBUG = true; //setting it to false leads to wdt reset loop for some reason. total awake time = 1100 msec. A lot of that time is probably setting up the scale.
-
+bool DEBUG = false; //espnow call back function was wrapped inside debug - which was causing reset
 
 
 void onSent(uint8_t *mac_addr, uint8_t sendStatus) {
@@ -58,7 +57,7 @@ batteryVoltage = ((analogRead(A0)*(1.1/1024))*((R1+R2)/R2))*1000;
 float reading; 
 scale.set_scale(226.626); 
 
-do {delayMicroseconds(50);}
+do {delayMicroseconds(10);}
 while (not (scale.is_ready()));
 
 
@@ -95,18 +94,14 @@ void prepareESPNOW() {
   // Register the peer
   //Serial.println("Registering a peer");
   esp_now_add_peer(peer1, ESP_NOW_ROLE_SLAVE, 1, NULL, 0);
-  if(DEBUG){
-  Serial.println("Registering send callback function");
+  if(DEBUG){ Serial.println("Registering send callback function");}
   esp_now_register_send_cb(onSent);
-  }
+
 }
  
  void senddata(){
  esp_now_send(NULL, (uint8_t *) str, 64);
  
-
-
-
 }
 
 
