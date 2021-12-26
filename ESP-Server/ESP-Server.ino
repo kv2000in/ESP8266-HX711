@@ -35,33 +35,26 @@ Sort out tare, what to store, taring/zeroing etc.
 #include <ArduinoOTA.h>
 #include <string.h>
 #include <espnow.h>
-typedef struct message {
-   int red;
-   int green;
-   int blue;
-} message;
-message myMessage;
+
 void onDataReceiver(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
-   Serial.println("Message received.");
-   // We don't use mac to verify the sender
-   // Let us transform the incomingData into our message structure
-  memcpy(&myMessage, incomingData, sizeof(myMessage));
-  Serial.print("Red:");
-  Serial.println(myMessage.red); 
-  Serial.print("Green:");
-  Serial.println(myMessage.green);
-  Serial.print("Blue:");
-  Serial.println(myMessage.blue);
+ 
+   Serial.print ("Message received.");
+
+    
+Serial.print("char: ");
+for (int k = 0; k <= 64; k++) {
+   
+ 
+   Serial.print((char)incomingData[k]);
+    Serial.print(" ");
+}
+Serial.println(); 
+  
 }
 
-
 #define MAX_STRING_LEN  32
-struct station_info *stat_info;
-struct ip4_addr *IPaddress;
-IPAddress address;
 
-WiFiEventHandler stationConnectedHandler;
-WiFiEventHandler stationDisconnectedHandler;
+
 
 // Function to return a substring defined by a delimiter at an index
 char* subStr (char* str, char *delim, int index) {
@@ -98,11 +91,8 @@ WebSocketsServer webSocket = WebSocketsServer(81);
 
 boolean saveData = false;
 boolean broadcast = false;
-int trigPin = 4;    
-int echoPin = 5;    
-long duration, serverHeight; 
-int clientHeight,ZeroOffset;
-char str[8];
+
+
 unsigned long currESPSecs, currTime,timestamp, zeroTime;
 
 static const char PROGMEM INDEX_HTML[] = R"rawliteral(
@@ -146,25 +136,25 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           //Serial.println(split2);
           if (strcmp(split2,"ZERO") == 0){
            // Serial.println("Zero command received");
-            if (!clientHeight){
-              Serial.println("No client data");
-              } else {
-            ZeroOffset=serverHeight-clientHeight;
-            zeroTime=timestamp+((millis()/1000)-currESPSecs);
-            //Serial.println(currTime);
-            File f = SPIFFS.open("/Zero.txt", "w");
-            f.print("Time:");
-            f.print(zeroTime);
-            f.print("\n");
-            f.print("ZeroOffset:");
-            f.print(ZeroOffset);
-            f.print("\n");
-            f.close();
-            //Reset the currESPsecs to current millis at the zerotime
-            //So the data save time will be zero time + secs elapsed since zero time
-            currESPSecs = millis()/1000;
-            
-            }
+//            if (!clientHeight){
+//              Serial.println("No client data");
+//              } else {
+//            ZeroOffset=serverHeight-clientHeight;
+//            zeroTime=timestamp+((millis()/1000)-currESPSecs);
+//            //Serial.println(currTime);
+//            File f = SPIFFS.open("/Zero.txt", "w");
+//            f.print("Time:");
+//            f.print(zeroTime);
+//            f.print("\n");
+//            f.print("ZeroOffset:");
+//            f.print(ZeroOffset);
+//            f.print("\n");
+//            f.close();
+//            //Reset the currESPsecs to current millis at the zerotime
+//            //So the data save time will be zero time + secs elapsed since zero time
+//            currESPSecs = millis()/1000;
+//            
+//            }
           } else if (strcmp(split2,"STARTSAVE") == 0){
             
             if (!saveData){
@@ -205,7 +195,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         {
           //Serial.println("Received Data");
           //Serial.println(split2);
-          clientHeight=atoi(split2);
+          //clientHeight=atoi(split2);
           if (saveData){
           //currTime=timestamp+((millis()/1000)-currESPSecs);
           currTime=((millis()/1000)-currESPSecs);
@@ -213,7 +203,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           f.print(currTime);
           f.print(":");
           f.print("C:");
-          f.print(clientHeight);
+          //f.print(clientHeight);
           f.print("\n");
           f.close();
           }
@@ -302,24 +292,10 @@ return fs_info.usedBytes/fs_info.totalBytes;
   
   }
 
-void onStationConnected(const WiFiEventSoftAPModeStationConnected& evt) {
-  Serial.print("Station connected: ");
-  Serial.println(macToString(evt.mac));
-}
-
-void onStationDisconnected(const WiFiEventSoftAPModeStationDisconnected& evt) {
-  Serial.print("Station disconnected: ");
-  Serial.println(macToString(evt.mac));
-}
 
 
 
-String macToString(const unsigned char* mac) {
-  char buf[20];
-  snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
-           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  return String(buf);
-}
+
 
 void setup()
 { 
@@ -347,10 +323,6 @@ void setup()
  Serial.println(myIP);
 Serial.printf("MAC address = %s\n", WiFi.softAPmacAddress().c_str());
 
-  // Call "onStationConnected" each time a station connects
-  stationConnectedHandler = WiFi.onSoftAPModeStationConnected(&onStationConnected);
-  // Call "onStationDisconnected" each time a station disconnects
-  stationDisconnectedHandler = WiFi.onSoftAPModeStationDisconnected(&onStationDisconnected);
   // Initializing the ESP-NOW
   if (esp_now_init() != 0) {
     Serial.println("Problem during ESP-NOW init");
@@ -423,57 +395,11 @@ ArduinoOTA.begin();
   
   }
 
-/*******TCP Server*****/
-void handletcpclient(){
-  String line;
-  WiFiClient client = tcpserver.available();
-  // wait for a client (web browser) to connect
-  if (client)
-  {
-    Serial.println("\n[Client connected]");
-    stat_info = wifi_softap_get_station_info();
-    IPaddress = &stat_info->ip;
-    address = IPaddress->addr;
-    Serial.print("Client IP Address = ");
-    Serial.print(address);
-    Serial.println();
-    Serial.print("Client MAC Address = ");
-    Serial.print(stat_info->bssid[3],HEX);
-    Serial.print(stat_info->bssid[4],HEX);
-    Serial.print(stat_info->bssid[5],HEX);
-    //macToString(stat_infobssid);
-    while (client.connected())
-    {
-      // read line by line what the client (web browser) is requesting
-      if (client.available())
-      {
-        line = client.readStringUntil('\0');
-        
-        
-      }
-    }
-
-//    while (client.available()) {
-//      // but first, let client finish its request
-//      // that's diplomatic compliance to protocols
-//      // (and otherwise some clients may complain, like curl)
-//      // (that is an example, prefer using a proper webserver library)
-//      client.read();
-//    }
-
-    // close the connection:
-    client.stop();
-    Serial.print(line);
-    //Serial.println("[Client disconnected]");
-  }
-  //webSocket.broadcastTXT(line, line.length());
-}
-/*****************************/
 
 void loop()
 {
   webSocket.loop();
   server.handleClient();
-  handletcpclient();
+
 
 }
