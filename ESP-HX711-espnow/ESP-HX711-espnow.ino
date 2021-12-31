@@ -19,6 +19,7 @@ char str[64];
 int resendCounter;
 int maxresendattempts=10;
 bool sendsuccess;
+unsigned long myTime;
 HX711 scale;
 
 
@@ -55,12 +56,12 @@ delay(5);
 batteryVoltage = ((analogRead(A0)*(1.1/1024))*((R1+R2)/R2))*1000;
 
 float reading; 
-scale.set_scale(226.626); 
-
+//scale.set_scale(226.626); 
+scale.set_scale(1);
 do {delayMicroseconds(10);}
 while (not (scale.is_ready()));
 
-
+if (DEBUG) {Serial.print("After Scale is Ready"); myTime = millis(); Serial.println(myTime); }//130 mSec
 
 reading = scale.get_units(10); 
 
@@ -69,22 +70,25 @@ if (DEBUG) {Serial.println(reading);}
 
 
 
-dtostrf(reading,12, 4,str);
+dtostrf(reading,12, 2,str);
+//ltoa(reading,str,12);
 //webSocket.broadcastTXT(datastr, strlen(datastr));
 int alength = strlen(str);
 str[alength]=':';
 
 //Add the battery value after ':'
 itoa( batteryVoltage, str+alength+1, 10 ); // for some reason +1 outputs starnge 2:32:283:26 or  2:11305:275:26
-
+alength = strlen(str);
+str[alength]='\0';
 
 if (DEBUG) {Serial.println(str);}
 scale.power_down();
 delay(5);
-  
+  if (DEBUG) {Serial.print("CreateDataend"); myTime = millis(); Serial.println(myTime);} //1006 mSec
   }
 void prepareESPNOW() {
-
+WiFi.mode(WIFI_STA);
+WiFi.persistent( false );
     // Initializing the ESP-NOW
   if (esp_now_init() != 0) {
     if (DEBUG){Serial.println("Problem during ESP-NOW init");}
@@ -119,13 +123,15 @@ sendsuccess = false;
 
 if (DEBUG){Serial.begin(115200);}
 if (DEBUG){Serial.println("Running Setup");}
-WiFi.mode(WIFI_STA);
-WiFi.persistent( false );
+
+if (DEBUG) {Serial.print("AfterSetup"); myTime = millis(); Serial.println(myTime);} //62 mSec
 
 
 createdata();
 
 prepareESPNOW();
+
+if (DEBUG) {Serial.print("After prepareESPNow"); myTime = millis(); Serial.println(myTime);}//1007 mSec 
 while ((sendsuccess==false)&&(resendCounter<maxresendattempts)){
 senddata();
 resendCounter++;

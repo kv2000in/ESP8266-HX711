@@ -35,24 +35,51 @@ Sort out tare, what to store, taring/zeroing etc.
 #include <ArduinoOTA.h>
 #include <string.h>
 #include <espnow.h>
-
+char mydata[64];
+long zerofactor=-817214;
+int calibrationfactor=1;
+int mytarereading=0;
 void onDataReceiver(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
  
    Serial.print ("Message received.");
 
+    Serial.print("MAC= ");
+    Serial.print(mac[3],HEX);
+    Serial.print(":");
+    Serial.print(mac[4],HEX);
+    Serial.print(":");
+    Serial.print(mac[5],HEX);
+    Serial.print(" Data: ");
     
-Serial.print("char: ");
-for (int k = 0; k <= 64; k++) {
-   
- 
-   Serial.print((char)incomingData[k]);
-    Serial.print(" ");
-}
-Serial.println(); 
-  
+//for (int k = 0; k <= 64; k++) {
+//   
+// 
+//   Serial.print((char)incomingData[k]);
+//    Serial.print(" ");
+//}
+//Serial.println();
+
+memcpy(mydata,incomingData,64); 
+char *mydata0 =subStr(mydata,":",1);//?index starts at 1 instead of 0
+char *mydata1=subStr(mydata,":",2);  
+long mylong;
+
+mylong = round((long)atol(mydata0));
+mylong=mylong-zerofactor;
+mylong = mylong/100; //getting down to the significant digit
+
+
+//y = mx+c . value of m (calibrationfactor) calculated from plotting known values with readings. C is the raw sensor reading at the time of tare.
+ // y is the sensor raw reading. x is the output for user.
+ //x = (y-C)/m;
+mylong = (mylong-mytarereading)/calibrationfactor; //(y-C)/m 
+
+Serial.print(mylong); 
+Serial.print(" Battery: ");
+Serial.println(atoi(mydata1));
 }
 
-#define MAX_STRING_LEN  32
+#define MAX_STRING_LEN  64
 
 
 
@@ -77,6 +104,7 @@ char* subStr (char* str, char *delim, int index) {
 //char *record2 = "Hello there friend";
 //Serial.println(subStr(record1, " ", 1));
 //output = one
+
 
 
 
