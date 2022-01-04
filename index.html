@@ -48,56 +48,20 @@
 					websock = new WebSocket('ws://' + window.location.hostname + ':81/');
 					websock.onopen = function(evt) { console.log('websock open');
 						
-						fnButton('RUSAVING');
+						
 						
 					};
 					websock.onclose = function(evt) { console.log('websock close'); };
 					websock.onerror = function(evt) { console.log(evt); };
 					websock.onmessage = function(evt) {
 						console.log(evt);
-						console.log(evt.data.slice(0,1));
-						if (evt.data.slice(0,1)=="T"){
-							
-							
-							document.getElementById("tspanDistance1").textContent = evt.data.slice(1);
-								//btnserverblink.style.background="red";
-								blinkled("server");
-						}
-						
-						else if (evt.data.slice(0,1)=="Y"){
-							
-							/*Server is currently saving*/
-							document.getElementById("btSTARTSAVE").disabled=true;
-							document.getElementById("btZERO").disabled=true;
-							document.getElementById("btSTOPSAVE").disabled=false;
-						}
-						
-						else if (evt.data.slice(0,1)=="N"){
-							/*Server is currently not saving*/
-							/*Send time stamp */
-							sendTimestamp();
-							document.getElementById("btSTARTSAVE").disabled=false;
-							document.getElementById("btZERO").disabled=false;
-							document.getElementById("btSTOPSAVE").disabled=true;
-						}
-						else {
-							document.getElementById("tspanDistance2").textContent = evt.data;
-							boolClientactive = true;
-								//var checkledstatus = document.getElementById("clientblink").attributes[0].value;
-								
-								blinkled("client");
-						}
+
 					};
 					
 					
 				}
 			
-			function blinkled(led){
-				
-				var el=  document.getElementById(led+"blink");
-				
-				el.classList.toggle("ledoff");
-			}
+
 			function doSend(message)
 			{
 				console.log("sent: " + message + '\n');

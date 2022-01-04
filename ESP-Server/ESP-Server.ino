@@ -35,48 +35,17 @@ Sort out tare, what to store, taring/zeroing etc.
 #include <ArduinoOTA.h>
 #include <string.h>
 #include <espnow.h>
-char mydata[64];
+char mydata[64]; 
+char macaddr[6];
 long zerofactor=-817214;
 int calibrationfactor=1;
 int mytarereading=0;
+bool dataavailable = false;
+
 void onDataReceiver(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
- 
-   Serial.print ("Message received.");
-
-    Serial.print("MAC= ");
-    Serial.print(mac[3],HEX);
-    Serial.print(":");
-    Serial.print(mac[4],HEX);
-    Serial.print(":");
-    Serial.print(mac[5],HEX);
-    Serial.print(" Data: ");
-    
-//for (int k = 0; k <= 64; k++) {
-//   
-// 
-//   Serial.print((char)incomingData[k]);
-//    Serial.print(" ");
-//}
-//Serial.println();
-
-memcpy(mydata,incomingData,64); 
-char *mydata0 =subStr(mydata,":",1);//?index starts at 1 instead of 0
-char *mydata1=subStr(mydata,":",2);  
-long mylong;
-
-mylong = round((long)atol(mydata0));
-mylong=mylong-zerofactor;
-mylong = mylong/100; //getting down to the significant digit
-
-
-//y = mx+c . value of m (calibrationfactor) calculated from plotting known values with readings. C is the raw sensor reading at the time of tare.
- // y is the sensor raw reading. x is the output for user.
- //x = (y-C)/m;
-mylong = (mylong-mytarereading)/calibrationfactor; //(y-C)/m 
-
-Serial.print(mylong); 
-Serial.print(" Battery: ");
-Serial.println(atoi(mydata1));
+  memcpy(mydata,incomingData,64);
+  memcpy(macaddr,mac,6);
+dataavailable = true;
 }
 
 #define MAX_STRING_LEN  64
@@ -114,7 +83,7 @@ const char *password = "monte123";
 
 
 ESP8266WebServer server(80);
-WiFiServer tcpserver(9999);//TCPserver
+//WiFiServer tcpserver(9999);//TCPserver
 WebSocketsServer webSocket = WebSocketsServer(81);
 
 boolean saveData = false;
@@ -124,6 +93,170 @@ boolean broadcast = false;
 unsigned long currESPSecs, currTime,timestamp, zeroTime;
 
 static const char PROGMEM INDEX_HTML[] = R"rawliteral(
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name = "viewport" content = "width = device-width, initial-scale = 1.0, maximum-scale = 1.0, user-scalable=0">
+      <title>Transducer Height Project</title>
+      <style>
+        "body { background-color: #808080; font-family: Arial, Helvetica, Sans-Serif; Color: #000000; }"
+        </style>
+      <style>
+        .ledon {
+          align-items: flex-start;
+          text-align: center;
+          cursor: default;
+          color: buttontext;
+          background-color: buttonface;
+          box-sizing: border-box;
+          padding: 2px 6px 3px;
+          border-width: 2px;
+          border-style: outset;
+          border-color: buttonface;
+          border-image: initial;
+          text-rendering: auto;
+          color: initial;
+          letter-spacing: normal;
+          word-spacing: normal;
+          text-transform: none;
+          text-indent: 0px;
+          text-shadow: none;
+          display: inline-block;
+          text-align: start;
+          margin: 0em;
+          font: 11px system-ui;
+          
+        }
+      
+      .ledoff {
+        background-color: #1ded4d;
+        
+      }
+      </style>
+      <script>
+        var websock;
+        var boolClientactive;
+        var boolHasZeroBeenDone = false;
+        
+        function start() {
+          websock = new WebSocket('ws://' + window.location.hostname + ':81/');
+          websock.onopen = function(evt) { console.log('websock open');
+            
+            
+            
+          };
+          websock.onclose = function(evt) { console.log('websock close'); };
+          websock.onerror = function(evt) { console.log(evt); };
+          websock.onmessage = function(evt) {
+            console.log(evt);
+
+          };
+          
+          
+        }
+      
+
+      function doSend(message)
+      {
+        console.log("sent: " + message + '\n');
+        /* writeToScreen("sent: " + message + '\n'); */
+        websock.send(message);
+      }
+      function fnButton(com){
+        
+        doSend("COMMAND-"+com);
+        
+      };
+      function download(file){
+        
+        
+      }
+      function zero(){
+        if (boolClientactive){
+          fnButton('ZERO');
+          boolHasZeroBeenDone = true; 
+        }
+        else {
+          alert("No client data - ?Client not connected"); 
+        }
+      }
+      
+      function startsave()
+      {
+        if(boolHasZeroBeenDone){
+          var decision = confirm("This will overwrite previous data.\n Press OK to proceed, Cancel to abort and Download data");
+          if (decision){
+            
+            fnButton('STARTSAVE');
+            /*Disable start save button and enable stop save button
+             Ideally - server should send whether it is currently saving data or not
+             */
+            document.getElementById("btSTARTSAVE").disabled=true;
+            document.getElementById("btZERO").disabled=true;
+            document.getElementById("btSTOPSAVE").disabled=false;
+          } else {
+            /*user selected cancel - let's redirect user to download the data*/
+            
+          }
+        } else { alert("Set Zero Before Saving")}
+      }
+      function stopsave(){
+        
+        fnButton('STOPSAVE');
+        document.getElementById("btSTARTSAVE").disabled=false;
+        document.getElementById("btZERO").disabled=false;
+        document.getElementById("btSTOPSAVE").disabled=true;
+      }
+      function sendTimestamp(){
+        
+        /*Send timestamp in milliseconds when connected */
+        var d = new Date();
+        var n = (d.getTime()/1000);
+        doSend("TIME-"+n);
+      }
+      </script>
+  </head>
+  <body onpageshow="javascript:start();">
+    <!--
+Server keeps the calibration data (based on MAC addresses)
+Server keeps track of raw values at the time of Tare
+Server returns data as 
+
+
+-->
+        
+    <div><b>Digital Scale Server</b></div> 
+    <label>Available Scales</label><list id = "listofsensornodes">
+        
+        <button>Assign</button>
+        <button>Zero</button>
+        <button>Plot</button>
+        <Label>Value since zero</Label> <input>
+        </list>
+    <strong><tspan  id="tspanDistance1">0</tspan> <text> &nbsp;(cm)</text>
+    </strong> <button class = "ledon" id ="serverblink"></button>
+    <div><b>Height of Client</b></div>
+    
+    <strong><tspan  id="tspanDistance2">0</tspan> <text> &nbsp;(cm)</text>
+    </strong> <button class = "ledon" id ="clientblink"></button> 
+    <br>
+    <button id = "btZERO" onclick="zero();">SET ZERO</button>
+    <button id = "btSTARTSAVE" onclick="startsave();">Start Save</button>
+    <button id = "btSTOPSAVE" onclick="stopsave();">Stop Save</button>
+    <br><br><br>
+    <a href="/Data.txt">Download Data</a>
+    <br><br>
+    <a href="/Zero.txt">Download Zero File</a>
+    <br><br>
+    <button id = "btCLOSEWS" onclick="websock.close();">Close Websocket</button>
+    
+  </body>
+  
+</html>
+
+
+
 )rawliteral";
 
 
@@ -320,8 +453,60 @@ return fs_info.usedBytes/fs_info.totalBytes;
   
   }
 
+void handledatafromnodes(char *sendermacaddress,char *datatobeprocessed){
+  //Data arrives as "-780305.00|3300" - excluding quotes
+//Send data as is to websocket
+char tosend[71]; //6 for mac + 1 for "|" + 64 data 
+memcpy(tosend,sendermacaddress,6);
+tosend[6] = '|';
+memcpy(tosend+7,datatobeprocessed,64);
+webSocket.broadcastTXT(tosend, 71);
+
+//  char *mydata1 =subStr(datatobeprocessed,"|",1);//?index starts at 1 instead of 0
+//char *mydata2=subStr(datatobeprocessed,"|",2); 
+// 
+////long mylong;
+//
+//mylong = round((long)atol(mydata1));
+//mylong=mylong-zerofactor;
+//mylong = mylong/100; //getting down to the significant digit
 
 
+//y = mx+c . value of m (calibrationfactor) calculated from plotting known values with readings. C is the raw sensor reading at the time of tare.
+ // y is the sensor raw reading. x is the output for user.
+ //x = (y-C)/m;
+//mylong = (mylong-mytarereading)/calibrationfactor; //(y-C)/m 
+//   Serial.print ("Message received.");
+//
+//    Serial.print("MAC= ");
+//    Serial.print(sendermacaddress[3],HEX);
+//    Serial.print(":");
+//    Serial.print(sendermacaddress[4],HEX);
+//    Serial.print(":");
+//    Serial.print(sendermacaddress[5],HEX);
+//    Serial.print(" Data: ");
+//Serial.print(mylong); 
+//Serial.print(" Battery: ");
+//Serial.println(atoi(mydata2));
+  //Once done processing - reset the array - can run into problems if data is arriving faster than it can be handled. Need to implement some sort of data queue
+  //thought about implementing a ringbuffer with index system but - one thread - not asynchronous so shouldn't matter.
+  memset(mydata, 0, sizeof(mydata));
+  memset(macaddr, 0, sizeof(macaddr));
+  //set datavailable to false;
+  dataavailable = false;
+//Push the data via websocket
+//Save calibrationfactor and zerofactor for each macaddress in a file
+//At boot time - open calibration and zerofactor files - and load these values into variables.  
+//Tare value - raw scale reading for each device needs to saved with macaddress
+//Calibration table, Name table (macaddr with name of the scale), Tare reading table, data table.
+// Will need to create and associative array of currentscalerawreadings with mac addresses - which keeps getting updated as data is received. Also need to keep track of time
+
+  
+  }
+
+void setscaletare(char *scalemacaddr, char *currentscalerawreading){
+  
+  }
 
 
 
@@ -370,7 +555,7 @@ Serial.printf("MAC address = %s\n", WiFi.softAPmacAddress().c_str());
   });
 
   server.begin();
- tcpserver.begin();
+ //tcpserver.begin();
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
 
@@ -428,6 +613,6 @@ void loop()
 {
   webSocket.loop();
   server.handleClient();
-
+if (dataavailable){handledatafromnodes(macaddr,mydata);}
 
 }
