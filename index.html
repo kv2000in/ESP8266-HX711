@@ -45,7 +45,7 @@
 				var boolHasZeroBeenDone = false;
 				
 				function start() {
-					websock = new WebSocket('ws://' + window.location.hostname + ':81/');
+					websock = new WebSocket('ws://' + window.location.hostname + '/ws');
 					websock.onopen = function(evt) { console.log('websock open');
 						
 						

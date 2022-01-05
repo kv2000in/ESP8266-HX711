@@ -26,21 +26,20 @@ Sort out tare, what to store, taring/zeroing etc.
 */
 
 #include <ESP8266WiFi.h>
-//#include <ESP8266WiFiMulti.h>
-#include <WebSocketsServer.h>
-#include <Hash.h>
-#include <ESP8266WebServer.h>
-//#include <ESP8266mDNS.h>
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
 #include "FS.h"
 #include <ArduinoOTA.h>
 #include <string.h>
 #include <espnow.h>
+
 char mydata[64]; 
 char macaddr[6];
-long zerofactor=-817214;
+long zerofactor=-817214; //not needed 
 int calibrationfactor=1;
 int mytarereading=0;
 bool dataavailable = false;
+
 
 void onDataReceiver(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
   memcpy(mydata,incomingData,64);
@@ -82,17 +81,13 @@ const char *password = "monte123";
 
 
 
-ESP8266WebServer server(80);
-//WiFiServer tcpserver(9999);//TCPserver
-WebSocketsServer webSocket = WebSocketsServer(81);
-
-boolean saveData = false;
-boolean broadcast = false;
-
+AsyncWebServer server(80);
+AsyncWebSocket webSocket("/ws"); 
 
 unsigned long currESPSecs, currTime,timestamp, zeroTime;
 
 static const char PROGMEM INDEX_HTML[] = R"rawliteral(
+
 
 <!DOCTYPE html>
 <html>
@@ -140,7 +135,8 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
         var boolHasZeroBeenDone = false;
         
         function start() {
-          websock = new WebSocket('ws://' + window.location.hostname + ':81/');
+          websock = new WebSocket('ws://' + window.location.hostname + '/ws');
+                    websock.binaryType = "arraybuffer"; //need to do this when dealing with binary data.
           websock.onopen = function(evt) { console.log('websock open');
             
             
@@ -150,6 +146,16 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
           websock.onerror = function(evt) { console.log(evt); };
           websock.onmessage = function(evt) {
             console.log(evt);
+                           if(evt.data instanceof ArrayBuffer) {
+                                // binary frame
+                    //const view = new DataView(evt.data);
+                    //console.log(view.getInt32(0));
+                    
+                        handleserverbinarydata(evt.data);
+                           } else {
+                    // text frame
+                        console.log(evt.data);
+                    }
 
           };
           
@@ -181,7 +187,25 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
           alert("No client data - ?Client not connected"); 
         }
       }
-      
+                
+            function handleserverbinarydata(serverbinarydata){
+                var mybinarydataarray= new Uint8Array(serverbinarydata);
+                var mysendermacaddress = mybinarydataarray.slice(0,6);
+                console.log(buf2hex(mysendermacaddress));
+                
+                
+                
+            }
+      //https://stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex
+                
+            function buf2hex(buffer) { // buffer is an ArrayBuffer
+  return [...new Uint8Array(buffer)]
+      .map(x => x.toString(16).padStart(2, '0'))
+      .join('');
+}
+                
+                
+                
       function startsave()
       {
         if(boolHasZeroBeenDone){
@@ -256,195 +280,234 @@ Server returns data as
 </html>
 
 
-
 )rawliteral";
 
 
 
 
-void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length)
-{
-  Serial.printf("webSocketEvent(%d, %d, ...)\r\n", num, type);
-  switch(type) {
-    case WStype_DISCONNECTED:
-      Serial.printf("[%u] Disconnected!\r\n", num);
-      break;
-    case WStype_CONNECTED:
-      {
-        IPAddress ip = webSocket.remoteIP(num);
-        Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\r\n", num, ip[0], ip[1], ip[2], ip[3], payload);
-      //itoa( cm, str, 10 );
-      //  webSocket.sendTXT(num, str, strlen(str));
-      }
-      break;
-    case WStype_TEXT:
-    {
-      //Serial.printf("[%u] get Text: %s\r\n", num, payload);
-
-      //Payload will be in the form of 3 alphapets and 3 digits
-      //DATA-105 means it is Data and value is 105
-      //COMMAND-ZERO means Command ZERO
-      //TIME-12345678 means epoch timestamp in seconds
-      
-      char *split1,*split2 ;
-     char *mystring = (char *)payload;
-      split1=subStr(mystring, "-", 1);
-      split2=subStr(mystring, "-", 2);
-      
-      if (strcmp(split1,"COMMAND") == 0)
-        {
-          //Serial.println("Received Command");
-          //Serial.println(split2);
-          if (strcmp(split2,"ZERO") == 0){
-           // Serial.println("Zero command received");
-//            if (!clientHeight){
-//              Serial.println("No client data");
-//              } else {
-//            ZeroOffset=serverHeight-clientHeight;
-//            zeroTime=timestamp+((millis()/1000)-currESPSecs);
-//            //Serial.println(currTime);
-//            File f = SPIFFS.open("/Zero.txt", "w");
-//            f.print("Time:");
-//            f.print(zeroTime);
-//            f.print("\n");
-//            f.print("ZeroOffset:");
-//            f.print(ZeroOffset);
-//            f.print("\n");
-//            f.close();
-//            //Reset the currESPsecs to current millis at the zerotime
-//            //So the data save time will be zero time + secs elapsed since zero time
-//            currESPSecs = millis()/1000;
+//void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length)
+//{
+//  Serial.printf("webSocketEvent(%d, %d, ...)\r\n", num, type);
+//  switch(type) {
+//    case WStype_DISCONNECTED:
+//      Serial.printf("[%u] Disconnected!\r\n", num);
+//      break;
+//    case WStype_CONNECTED:
+//      {
+//        IPAddress ip = webSocket.remoteIP(num);
+//        Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\r\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+//      //itoa( cm, str, 10 );
+//      //  webSocket.sendTXT(num, str, strlen(str));
+//      }
+//      break;
+//    case WStype_TEXT:
+//    {
+//      //Serial.printf("[%u] get Text: %s\r\n", num, payload);
+//
+//      //Payload will be in the form of 3 alphapets and 3 digits
+//      //DATA-105 means it is Data and value is 105
+//      //COMMAND-ZERO means Command ZERO
+//      //TIME-12345678 means epoch timestamp in seconds
+//      
+//      char *split1,*split2 ;
+//     char *mystring = (char *)payload;
+//      split1=subStr(mystring, "-", 1);
+//      split2=subStr(mystring, "-", 2);
+//      
+//      if (strcmp(split1,"COMMAND") == 0)
+//        {
+//          //Serial.println("Received Command");
+//          //Serial.println(split2);
+//          if (strcmp(split2,"ZERO") == 0){
+//           // Serial.println("Zero command received");
+////            if (!clientHeight){
+////              Serial.println("No client data");
+////              } else {
+////            ZeroOffset=serverHeight-clientHeight;
+////            zeroTime=timestamp+((millis()/1000)-currESPSecs);
+////            //Serial.println(currTime);
+////            File f = SPIFFS.open("/Zero.txt", "w");
+////            f.print("Time:");
+////            f.print(zeroTime);
+////            f.print("\n");
+////            f.print("ZeroOffset:");
+////            f.print(ZeroOffset);
+////            f.print("\n");
+////            f.close();
+////            //Reset the currESPsecs to current millis at the zerotime
+////            //So the data save time will be zero time + secs elapsed since zero time
+////            currESPSecs = millis()/1000;
+////            
+////            }
+//          } else if (strcmp(split2,"STARTSAVE") == 0){
 //            
+//            if (!saveData){
+//              saveData=true;
+//            File f = SPIFFS.open("/Data.txt", "w");
+//            f.close();
+//            //Create a file which keeps log of current saving process
+//            File s = SPIFFS.open("/Save.txt", "w");
+//            s.print("Y");
+//            s.close();
 //            }
-          } else if (strcmp(split2,"STARTSAVE") == 0){
-            
-            if (!saveData){
-              saveData=true;
-            File f = SPIFFS.open("/Data.txt", "w");
-            f.close();
-            //Create a file which keeps log of current saving process
-            File s = SPIFFS.open("/Save.txt", "w");
-            s.print("Y");
-            s.close();
-            }
-            
-            } 
+//            
+//            } 
+//
+//            else if (strcmp(split2,"STOPSAVE") == 0) 
+//            {
+//              if (saveData){saveData=false;
+//                File s = SPIFFS.open("/Save.txt", "w");
+//                s.print("N");
+//                s.close();
+//              }
+//              }
+//
+//             
+//            else if (strcmp(split2,"RUSAVING") == 0) 
+//            {
+//              if (saveData){
+//                webSocket.sendTXT(num, "Y");
+//                } else {
+//                  
+//                webSocket.sendTXT(num, "N");  
+//                  }
+//              }
+//
+//        
+//        } 
+//      else if (strcmp(split1,"DATA") == 0)
+//        {
+//          //Serial.println("Received Data");
+//          //Serial.println(split2);
+//          //clientHeight=atoi(split2);
+//          if (saveData){
+//          //currTime=timestamp+((millis()/1000)-currESPSecs);
+//          currTime=((millis()/1000)-currESPSecs);
+//          File f = SPIFFS.open("/Data.txt", "a");
+//          f.print(currTime);
+//          f.print(":");
+//          f.print("C:");
+//          //f.print(clientHeight);
+//          f.print("\n");
+//          f.close();
+//          }
+//          if(broadcast){
+//           webSocket.broadcastTXT(split2, strlen(split2));
+//            } else {
+//              //If not broadcast - send to browser client num =1
+//              webSocket.sendTXT(1,split2, strlen(split2));
+//              
+//              }
+//          
+//        } 
+//      else if (strcmp(split1,"TIME") == 0)
+//        {
+//          //Serial.println("Received TimeStamp");
+//          //Serial.println(split2);
+//          timestamp=atol(split2);
+//          //currTime=split2;
+//          currESPSecs = millis()/1000;
+//          //Serial.println(timestamp);
+//          //Serial.println(currESPSecs);
+//        }
+//      else 
+//      {
+//          Serial.printf("Unknown-");
+//          Serial.printf("[%u] get Text: %s\r\n", num, payload);
+//          // send data to all connected clients
+//          //webSocket.broadcastTXT(payload, length);
+//      }
+//    }
+//    // clientHeight=atoi((const char *)payload);
+//     // Serial.println((const char *)payload);
+//     // itoa( cm, str, 10 );
+//      // webSocket.sendTXT(0, str, strlen(str));
+//      break;
+//    case WStype_BIN:
+//      Serial.printf("[%u] get binary length: %u\r\n", num, length);
+//      hexdump(payload, length);
+//
+//      // echo data back to browser
+//      webSocket.sendBIN(num, payload, length);
+//      break;
+//    default:
+//      Serial.printf("Invalid WStype [%d]\r\n", type);
+//      break;
+//  }
+//}
+void handlecommandsfromwebsocketclients(char * datasentbywebsocketclient){
+  //Commands will include the MAC Address - Tare or MAC Address - save common name or MAC Address 
+  }
 
-            else if (strcmp(split2,"STOPSAVE") == 0) 
-            {
-              if (saveData){saveData=false;
-                File s = SPIFFS.open("/Save.txt", "w");
-                s.print("N");
-                s.close();
-              }
-              }
-
-             
-            else if (strcmp(split2,"RUSAVING") == 0) 
-            {
-              if (saveData){
-                webSocket.sendTXT(num, "Y");
-                } else {
-                  
-                webSocket.sendTXT(num, "N");  
-                  }
-              }
-
-        
-        } 
-      else if (strcmp(split1,"DATA") == 0)
-        {
-          //Serial.println("Received Data");
-          //Serial.println(split2);
-          //clientHeight=atoi(split2);
-          if (saveData){
-          //currTime=timestamp+((millis()/1000)-currESPSecs);
-          currTime=((millis()/1000)-currESPSecs);
-          File f = SPIFFS.open("/Data.txt", "a");
-          f.print(currTime);
-          f.print(":");
-          f.print("C:");
-          //f.print(clientHeight);
-          f.print("\n");
-          f.close();
-          }
-          if(broadcast){
-           webSocket.broadcastTXT(split2, strlen(split2));
-            } else {
-              //If not broadcast - send to browser client num =1
-              webSocket.sendTXT(1,split2, strlen(split2));
-              
-              }
-          
-        } 
-      else if (strcmp(split1,"TIME") == 0)
-        {
-          //Serial.println("Received TimeStamp");
-          //Serial.println(split2);
-          timestamp=atol(split2);
-          //currTime=split2;
-          currESPSecs = millis()/1000;
-          //Serial.println(timestamp);
-          //Serial.println(currESPSecs);
+void onEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
+  if(type == WS_EVT_CONNECT){
+    //client connected
+    os_printf("ws[%s][%u] connect\n", server->url(), client->id());
+    client->printf("Hello Client %u :)", client->id());
+    client->ping();
+  } else if(type == WS_EVT_DISCONNECT){
+    //client disconnected
+    os_printf("ws[%s][%u] disconnect: %u\n", server->url(), client->id());
+  } else if(type == WS_EVT_ERROR){
+    //error was received from the other end
+    os_printf("ws[%s][%u] error(%u): %s\n", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
+  } else if(type == WS_EVT_PONG){
+    //pong message was received (in response to a ping request maybe)
+    os_printf("ws[%s][%u] pong[%u]: %s\n", server->url(), client->id(), len, (len)?(char*)data:"");
+  } else if(type == WS_EVT_DATA){
+    //data packet
+    AwsFrameInfo * info = (AwsFrameInfo*)arg;
+    if(info->final && info->index == 0 && info->len == len){
+      //the whole message is in a single frame and we got all of it's data
+      os_printf("ws[%s][%u] %s-message[%llu]: ", server->url(), client->id(), (info->opcode == WS_TEXT)?"text":"binary", info->len);
+      if(info->opcode == WS_TEXT){
+        data[len] = 0;
+        os_printf("%s\n", (char*)data);
+        //handlecommandsfromwebsocketclients(data);
+      } else {
+        for(size_t i=0; i < info->len; i++){
+          os_printf("%02x ", data[i]);
         }
-      else 
-      {
-          Serial.printf("Unknown-");
-          Serial.printf("[%u] get Text: %s\r\n", num, payload);
-          // send data to all connected clients
-          //webSocket.broadcastTXT(payload, length);
+        os_printf("\n");
+      }
+      if(info->opcode == WS_TEXT)
+        client->text("I got your text message");
+      else
+        client->binary("I got your binary message");
+    } else {
+      //message is comprised of multiple frames or the frame is split into multiple packets
+      if(info->index == 0){
+        if(info->num == 0)
+          os_printf("ws[%s][%u] %s-message start\n", server->url(), client->id(), (info->message_opcode == WS_TEXT)?"text":"binary");
+        os_printf("ws[%s][%u] frame[%u] start[%llu]\n", server->url(), client->id(), info->num, info->len);
+      }
+
+      os_printf("ws[%s][%u] frame[%u] %s[%llu - %llu]: ", server->url(), client->id(), info->num, (info->message_opcode == WS_TEXT)?"text":"binary", info->index, info->index + len);
+      if(info->message_opcode == WS_TEXT){
+        data[len] = 0;
+        os_printf("%s\n", (char*)data);
+      } else {
+        for(size_t i=0; i < len; i++){
+          os_printf("%02x ", data[i]);
+        }
+        os_printf("\n");
+      }
+
+      if((info->index + len) == info->len){
+        os_printf("ws[%s][%u] frame[%u] end[%llu]\n", server->url(), client->id(), info->num, info->len);
+        if(info->final){
+          os_printf("ws[%s][%u] %s-message end\n", server->url(), client->id(), (info->message_opcode == WS_TEXT)?"text":"binary");
+          if(info->message_opcode == WS_TEXT)
+            client->text("I got your text message");
+          else
+            client->binary("I got your binary message");
+        }
       }
     }
-    // clientHeight=atoi((const char *)payload);
-     // Serial.println((const char *)payload);
-     // itoa( cm, str, 10 );
-      // webSocket.sendTXT(0, str, strlen(str));
-      break;
-    case WStype_BIN:
-      Serial.printf("[%u] get binary length: %u\r\n", num, length);
-      hexdump(payload, length);
-
-      // echo data back to browser
-      webSocket.sendBIN(num, payload, length);
-      break;
-    default:
-      Serial.printf("Invalid WStype [%d]\r\n", type);
-      break;
   }
 }
 
-void handleRoot()
-{
-  server.send_P(200, "text/html", INDEX_HTML);
-}
 
-
-
-
-//String getContentType(String filename); // convert the file extension to the MIME type
-bool handleFileRead(String path);       // send the right file to the client (if it exists)
-//String getContentType(String filename) { // convert the file extension to the MIME type
-//  if (filename.endsWith(".html")) return "text/html";
-//  else if (filename.endsWith(".css")) return "text/css";
-//  else if (filename.endsWith(".js")) return "application/javascript";
-//  else if (filename.endsWith(".ico")) return "image/x-icon";
-//  return "text/plain";
-//}
-
-bool handleFileRead(String path) { // send the right file to the client (if it exists)
-  //Serial.println("handleFileRead: " + path);
-  if (path.endsWith("/")) path += "index.html";         // If a folder is requested, send the index file
-  //String contentType = getContentType(path);            // Get the MIME type
-  if (SPIFFS.exists(path)) {                            // If the file exists
-    File file = SPIFFS.open(path, "r");                 // Open it
-    //size_t sent = server.streamFile(file, contentType); // And send it to the client
-    size_t sent = server.streamFile(file, "text/plain"); // And send it to the client
-    file.close();                                       // Then close the file again
-    return true;
-  }
-  //Serial.println("\tFile Not Found");
-  return false;                                         // If the file doesn't exist, return false
-}
 
 int fractionoccupiedspaceonfilesystem(){
 FSInfo fs_info;
@@ -460,34 +523,8 @@ char tosend[71]; //6 for mac + 1 for "|" + 64 data
 memcpy(tosend,sendermacaddress,6);
 tosend[6] = '|';
 memcpy(tosend+7,datatobeprocessed,64);
-webSocket.broadcastTXT(tosend, 71);
+webSocket.binaryAll(tosend, 71);
 
-//  char *mydata1 =subStr(datatobeprocessed,"|",1);//?index starts at 1 instead of 0
-//char *mydata2=subStr(datatobeprocessed,"|",2); 
-// 
-////long mylong;
-//
-//mylong = round((long)atol(mydata1));
-//mylong=mylong-zerofactor;
-//mylong = mylong/100; //getting down to the significant digit
-
-
-//y = mx+c . value of m (calibrationfactor) calculated from plotting known values with readings. C is the raw sensor reading at the time of tare.
- // y is the sensor raw reading. x is the output for user.
- //x = (y-C)/m;
-//mylong = (mylong-mytarereading)/calibrationfactor; //(y-C)/m 
-//   Serial.print ("Message received.");
-//
-//    Serial.print("MAC= ");
-//    Serial.print(sendermacaddress[3],HEX);
-//    Serial.print(":");
-//    Serial.print(sendermacaddress[4],HEX);
-//    Serial.print(":");
-//    Serial.print(sendermacaddress[5],HEX);
-//    Serial.print(" Data: ");
-//Serial.print(mylong); 
-//Serial.print(" Battery: ");
-//Serial.println(atoi(mydata2));
   //Once done processing - reset the array - can run into problems if data is arriving faster than it can be handled. Need to implement some sort of data queue
   //thought about implementing a ringbuffer with index system but - one thread - not asynchronous so shouldn't matter.
   memset(mydata, 0, sizeof(mydata));
@@ -509,7 +546,9 @@ void setscaletare(char *scalemacaddr, char *currentscalerawreading){
   }
 
 
-
+void notFound(AsyncWebServerRequest *request) {
+    request->send(404, "text/plain", "Not found");
+}
 void setup()
 { 
 
@@ -547,17 +586,21 @@ Serial.printf("MAC address = %s\n", WiFi.softAPmacAddress().c_str());
   esp_now_register_recv_cb(onDataReceiver);
   
   
-  server.on("/", handleRoot);
-  //server.onNotFound(handleNotFound);
-  server.onNotFound([]() {                              // If the client requests any URI
-    if (!handleFileRead(server.uri()))                  // send it if it exists
-      server.send(404, "text/plain", "404: Not Found"); // otherwise, respond with a 404 (Not Found) error
-  });
 
+
+      
+
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+        request->send(200, "text/html", INDEX_HTML);
+     
+    
+    });
+
+ webSocket.onEvent(onEvent);
+  server.addHandler(&webSocket);
   server.begin();
- //tcpserver.begin();
-  webSocket.begin();
-  webSocket.onEvent(webSocketEvent);
+  server.onNotFound(notFound);
+
 
 
 
@@ -611,8 +654,8 @@ ArduinoOTA.begin();
 
 void loop()
 {
-  webSocket.loop();
-  server.handleClient();
+ 
+  
 if (dataavailable){handledatafromnodes(macaddr,mydata);}
 
 }
