@@ -33,8 +33,10 @@ Sort out tare, what to store, taring/zeroing etc.
 #include <string.h>
 #include <espnow.h>
 
-char mydata[64]; 
+char mydata[8]; 
 char macaddr[6];
+float myfloatbytes;
+int myintbytes;
 long zerofactor=-817214; //not needed 
 int calibrationfactor=1;
 int mytarereading=0;
@@ -42,7 +44,7 @@ bool dataavailable = false;
 
 
 void onDataReceiver(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
-  memcpy(mydata,incomingData,64);
+  memcpy(mydata,incomingData,8);
   memcpy(macaddr,mac,6);
 dataavailable = true;
 }
@@ -189,9 +191,16 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
       }
                 
             function handleserverbinarydata(serverbinarydata){
+                //16 bytes of data = 6 for mac + 8 for data(really just 6 for data - 4 for float and 2 for int+2 extra) + 2 extra
                 var mybinarydataarray= new Uint8Array(serverbinarydata);
                 var mysendermacaddress = mybinarydataarray.slice(0,6);
-                console.log(buf2hex(mysendermacaddress));
+                var myscalefloatvaluebytes = serverbinarydata.slice(6,10); 
+                var mybatteryvoltagebytes = serverbinarydata.slice(10,12);
+                var myfloatview = new DataView(myscalefloatvaluebytes);
+                var myintview = new DataView(mybatteryvoltagebytes);
+                var myscalefloatvalue = myfloatview.getFloat32(0,true); // Signed 32 bit float, little endian. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView/getFloat32
+                var mybatteryvoltage = myintview.getInt16(0,true);
+                console.log("Data from MAC Address :" + buf2hex(mysendermacaddress) + " Reading = "+myscalefloatvalue+ " Battery = "+mybatteryvoltage);
                 
                 
                 
@@ -517,14 +526,13 @@ return fs_info.usedBytes/fs_info.totalBytes;
   }
 
 void handledatafromnodes(char *sendermacaddress,char *datatobeprocessed){
-  //Data arrives as "-780305.00|3300" - excluding quotes
+  //Data arrives as 4bytes of float -scale reading and 2 bytes of integer - batteryvoltage
 //Send data as is to websocket
-char tosend[71]; //6 for mac + 1 for "|" + 64 data 
+char tosend[16]; //6 for mac + 8 for data(really just 6 for data - 4 for float and 2 for int+2 extra) + 2 extra
 memcpy(tosend,sendermacaddress,6);
-tosend[6] = '|';
-memcpy(tosend+7,datatobeprocessed,64);
-webSocket.binaryAll(tosend, 71);
-
+memcpy(tosend+6,datatobeprocessed,8);
+webSocket.binaryAll(tosend, 16);
+convertrawdata(datatobeprocessed);
   //Once done processing - reset the array - can run into problems if data is arriving faster than it can be handled. Need to implement some sort of data queue
   //thought about implementing a ringbuffer with index system but - one thread - not asynchronous so shouldn't matter.
   memset(mydata, 0, sizeof(mydata));
@@ -541,6 +549,17 @@ webSocket.binaryAll(tosend, 71);
   
   }
 
+void convertrawdata(char * rawdata){
+  //Thinking about saving everything binary - as it will save space. All binary to ascii conversions to be done by javascript on the browsers.
+  //So this function is here just for testing.
+ memcpy(&myfloatbytes,rawdata,4);
+ memcpy(&myintbytes,rawdata+4,2);
+Serial.print("Reading = ");
+Serial.print(myfloatbytes);
+Serial.print(" BatteryVoltage= ");
+Serial.println(myintbytes);
+ 
+  }
 void setscaletare(char *scalemacaddr, char *currentscalerawreading){
   
   }
@@ -609,7 +628,8 @@ Serial.printf("MAC address = %s\n", WiFi.softAPmacAddress().c_str());
 
   //Open the "Save.txt" file and check if we were saving before the reset happened
   File q = SPIFFS.open("/Save.txt", "r");
-  if (q.find("Y")){saveData=true;}
+  if (q.find("Y")){//saveData=true;
+    }
   q.close();
   
   

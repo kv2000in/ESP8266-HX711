@@ -16,14 +16,13 @@
 #include "HX711.h"
 // Mac address of the slave
 uint8_t peer0[] = {0x86, 0xCC, 0xA8, 0xAA, 0x20, 0xF9};//86:CC:A8:AA:20:F9 softAP MAC of server
-uint8_t macAddr[6];
 int batteryVoltage; //Can either use ADC or ESP.getVcc(). ADC has to be floating for getVcc to work. 
 
 // HX711 circuit wiring
 const int LOADCELL_DOUT_PIN = 4; //Hardwired
 const int LOADCELL_SCK_PIN = 5; //Hardwired
      
-char str[64];
+char str[8];
 int resendcounter;
 int maxresendattempts=10;
 bool sendsuccess;
@@ -68,11 +67,10 @@ scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
 //scale.set_scale(211.8*10.7);                      // this value is obtained by calibrating the scale with known weights; see above and the https://github.com/bogde/HX711 README for details
 scale.power_up();
 delay(5);
-  str[64]={};
-WiFi.mode(WIFI_STA);
-//WiFi.macAddress(macAddr);
-//memcpy(str,macAddr,6);
-//str[6]='|';
+//set Char array to 0;
+memset(str,0,8);
+
+
 //ADC*(1.1/1024) will give the Vout at the voltage divider
 //V=(Vout*((R1+R2)/R2))*1000 miliVolts
 batteryVoltage = ((analogRead(A0)*(1.1/1024))*((R1+R2)/R2))*1000;
@@ -90,20 +88,10 @@ reading = scale.get_units(10);
 
 if (DEBUG) {Serial.println(reading);}
 
-
-//dtostrf(reading,12, 2,str+7);
-dtostrf(reading,12, 2,str);
-//ltoa(reading,str,12);
-//webSocket.broadcastTXT(datastr, strlen(datastr));
-int alength = strlen(str);
-str[alength]='|';
-
-//Add the battery value after ':'
-itoa( batteryVoltage, str+alength+1, 10 ); // for some reason +1 outputs starnge 2:32:283:26 or  2:11305:275:26
-alength = strlen(str);
-str[alength]='\0';
-
-if (DEBUG) {Serial.println(str);}
+//memcpy(str,&reading,sizeof(reading));
+memcpy(str,&reading,4);//size of float = 4 bytes
+memcpy(str+sizeof(reading),&batteryVoltage,sizeof(batteryVoltage));
+memcpy(str+4,&batteryVoltage,2); //size of int = 2 bytes
 scale.power_down();
 delay(5);
   if (DEBUG) {Serial.print("CreateDataend"); myTime = millis(); Serial.println(myTime);} //1006 mSec
@@ -128,7 +116,7 @@ resendcounter=0;
 }
  
  void senddata(){
- esp_now_send(NULL, (uint8_t *) str, 64);
+ esp_now_send(NULL, (uint8_t *) str, 8);
  resendcounter++;
 }
 

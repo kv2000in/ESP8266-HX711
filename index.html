@@ -46,6 +46,7 @@
 				
 				function start() {
 					websock = new WebSocket('ws://' + window.location.hostname + '/ws');
+                    websock.binaryType = "arraybuffer"; //need to do this when dealing with binary data.
 					websock.onopen = function(evt) { console.log('websock open');
 						
 						
@@ -55,6 +56,16 @@
 					websock.onerror = function(evt) { console.log(evt); };
 					websock.onmessage = function(evt) {
 						console.log(evt);
+                           if(evt.data instanceof ArrayBuffer) {
+                                // binary frame
+                    //const view = new DataView(evt.data);
+                    //console.log(view.getInt32(0));
+                    
+                        handleserverbinarydata(evt.data);
+                           } else {
+                    // text frame
+                        console.log(evt.data);
+                    }
 
 					};
 					
@@ -86,7 +97,32 @@
 					alert("No client data - ?Client not connected"); 
 				}
 			}
-			
+                
+            function handleserverbinarydata(serverbinarydata){
+                //16 bytes of data = 6 for mac + 8 for data(really just 6 for data - 4 for float and 2 for int+2 extra) + 2 extra
+                var mybinarydataarray= new Uint8Array(serverbinarydata);
+                var mysendermacaddress = mybinarydataarray.slice(0,6);
+                var myscalefloatvaluebytes = serverbinarydata.slice(6,10); 
+                var mybatteryvoltagebytes = serverbinarydata.slice(10,12);
+                var myfloatview = new DataView(myscalefloatvaluebytes);
+                var myintview = new DataView(mybatteryvoltagebytes);
+                var myscalefloatvalue = myfloatview.getFloat32(0,true); // Signed 32 bit float, little endian. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView/getFloat32
+                var mybatteryvoltage = myintview.getInt16(0,true);
+                console.log("Data from MAC Address :" + buf2hex(mysendermacaddress) + " Reading = "+myscalefloatvalue+ " Battery = "+mybatteryvoltage);
+                
+                
+                
+            }
+			//https://stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex
+                
+            function buf2hex(buffer) { // buffer is an ArrayBuffer
+  return [...new Uint8Array(buffer)]
+      .map(x => x.toString(16).padStart(2, '0'))
+      .join('');
+}
+                
+                
+                
 			function startsave()
 			{
 				if(boolHasZeroBeenDone){
