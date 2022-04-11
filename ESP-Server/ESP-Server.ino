@@ -90,7 +90,6 @@ unsigned long currESPSecs, currTime,timestamp, zeroTime;
 
 static const char PROGMEM INDEX_HTML[] = R"rawliteral(
 
-
 <!DOCTYPE html>
 <html>
   <head>
@@ -100,38 +99,21 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
         "body { background-color: #808080; font-family: Arial, Helvetica, Sans-Serif; Color: #000000; }"
         </style>
       <style>
-        .ledon {
-          align-items: flex-start;
-          text-align: center;
-          cursor: default;
-          color: buttontext;
-          background-color: buttonface;
-          box-sizing: border-box;
-          padding: 2px 6px 3px;
-          border-width: 2px;
-          border-style: outset;
-          border-color: buttonface;
-          border-image: initial;
-          text-rendering: auto;
-          color: initial;
-          letter-spacing: normal;
-          word-spacing: normal;
-          text-transform: none;
-          text-indent: 0px;
-          text-shadow: none;
-          display: inline-block;
-          text-align: start;
-          margin: 0em;
-          font: 11px system-ui;
-          
-        }
-      
-      .ledoff {
-        background-color: #1ded4d;
-        
-      }
+
+                td{
+                    border: groove;
+                }
+                .td-hidden{
+                    display: none;
+                }
+                .td-actions{
+                    visibility: visible;
+                }
       </style>
       <script>
+                //Will be obsolete once the code for requesting these values from the server are written
+                 var calibrationfactor;
+                    var    zerorawvalue;
         var websock;
         var boolClientactive;
         var boolHasZeroBeenDone = false;
@@ -200,10 +182,14 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
                 var myintview = new DataView(mybatteryvoltagebytes);
                 var myscalefloatvalue = myfloatview.getFloat32(0,true); // Signed 32 bit float, little endian. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView/getFloat32
                 var mybatteryvoltage = myintview.getInt16(0,true);
-                console.log("Data from MAC Address :" + buf2hex(mysendermacaddress) + " Reading = "+myscalefloatvalue+ " Battery = "+mybatteryvoltage);
-                
-                
-                
+               //Generate timestamp for this data
+                var today = new Date();
+                var date = today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
+                var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+                var dateTime = date+' '+time;
+            //call the data handler routine
+                handlecleanedupdata(buf2hex(mysendermacaddress),myscalefloatvalue,mybatteryvoltage,dateTime);
+            
             }
       //https://stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex
                 
@@ -212,7 +198,96 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
       .map(x => x.toString(16).padStart(2, '0'))
       .join('');
 }
-                
+      
+                function handlecleanedupdata(macaddr,rawreading,battery,mytime){
+                var mydatalist = document.getElementById("availablesensors");
+                  var n;
+                  var alreadypresent="false";
+                  for (n=0;n<mydatalist.options.length;n++)
+                      {
+                          if (macaddr == mydatalist.options[n].value){
+                          //Don't add if the macaddr already in the list
+                          alreadypresent="true"
+                        // Table must already have been expanded so just fill up the data
+                              //Fill up the columns with data
+                      document.getElementById("addr"+macaddr).innerHTML=macaddr;
+                      //User assignment of names - may be store it on the server
+                      document.getElementById("rawreading"+macaddr).innerHTML=rawreading;
+                    document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvalue)/100)*calibrationfactor);
+                      document.getElementById("battery"+macaddr).innerHTML=battery;
+                      document.getElementById("time"+macaddr).innerHTML=mytime;
+                              
+                              
+                              break;
+                          }
+
+                      }
+                    // Data being received from a MAC address which isn't alreadypresent in the list
+                  if (alreadypresent=="false"){
+                      
+                      //Add this MAC address to the list of all online MAC addresses 
+                      const newele0=document.createElement("Option");
+                        newele0.value=macaddr;
+                        mydatalist.appendChild(newele0);
+                      //Request stored calibration factor and zero level value from the server
+                        calibrationfactor = 500/285; //Actual weight/Displayed weight when calibration factor = 1.
+                        zerorawvalue = -811493;
+                      //Expand the sensortable to add another row with children whose id is assigned by concatenating macaddress
+                        const newele1=document.createElement("tr");
+                        newele1.setAttribute("id",macaddr);
+                        var mytable = document.getElementById("sensortable");
+                        mytable.appendChild(newele1);
+                        var myrow = document.getElementById(macaddr);
+                      //Add columns to the new row
+                        const newele2 = document.createElement("td");
+                        newele2.setAttribute("id","addr"+macaddr);
+                        newele2.setAttribute("class","td-hidden");
+                        const newele2a = document.createElement("td");
+                        newele2a.setAttribute("id","name"+macaddr);
+                        const newele3 = document.createElement("td");
+                        newele3.setAttribute("id","rawreading"+macaddr);
+                        newele3.setAttribute("class","td-hidden");
+                        const newele3a = document.createElement("td");
+                        newele3a.setAttribute("id","calibrationfactor"+macaddr);
+                        newele3a.setAttribute("class","td-hidden");
+                        const newele3b = document.createElement("td");
+                        newele3b.setAttribute("id","reading"+macaddr);
+                        const newele4 = document.createElement("td");
+                        newele4.setAttribute("id","battery"+macaddr);
+                        const newele5 = document.createElement("td");
+                        newele5.setAttribute("id","time"+macaddr);
+                        const newele6 = document.createElement("td");
+                        newele6.setAttribute("id","actions"+macaddr);
+                        newele6.setAttribute("class","td-actions");
+                        myrow.appendChild(newele2);
+                        myrow.appendChild(newele2a);
+                        myrow.appendChild(newele3);
+                        myrow.appendChild(newele3a);
+                        myrow.appendChild(newele3b);
+                        myrow.appendChild(newele4);
+                        myrow.appendChild(newele5);
+                        myrow.appendChild(newele6);
+                      //Fill up the columns with data
+                      document.getElementById("addr"+macaddr).innerHTML=macaddr;
+                      //User assignment of names - may be store it on the server
+                      document.getElementById("rawreading"+macaddr).innerHTML=rawreading;
+                       document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvalue)/100)*calibrationfactor);
+                      document.getElementById("battery"+macaddr).innerHTML=battery;
+                      document.getElementById("time"+macaddr).innerHTML=mytime;
+                      //Actions Zero/Tare, Calibrate
+                      const newele7 = document.createElement("button");
+                      newele7.setAttribute("id","zero"+macaddr);
+                      newele7.innerHTML="Zero";
+                      const newele8 = document.createElement("button");
+                      newele8.setAttribute("id","calibrate"+macaddr);
+                      newele8.innerHTML="Calibrate";
+                      document.getElementById("actions"+macaddr).appendChild(newele7);
+                      document.getElementById("actions"+macaddr).appendChild(newele8);
+                  }
+                    
+                    
+                    
+                }
                 
                 
       function startsave()
@@ -260,34 +335,34 @@ Server returns data as
 -->
         
     <div><b>Digital Scale Server</b></div> 
-    <label>Available Scales</label><list id = "listofsensornodes">
-        
-        <button>Assign</button>
-        <button>Zero</button>
-        <button>Plot</button>
-        <Label>Value since zero</Label> <input>
-        </list>
-    <strong><tspan  id="tspanDistance1">0</tspan> <text> &nbsp;(cm)</text>
-    </strong> <button class = "ledon" id ="serverblink"></button>
-    <div><b>Height of Client</b></div>
+    <label>Available Scales</label>
+        <input list="availablesensors">
     
-    <strong><tspan  id="tspanDistance2">0</tspan> <text> &nbsp;(cm)</text>
-    </strong> <button class = "ledon" id ="clientblink"></button> 
-    <br>
-    <button id = "btZERO" onclick="zero();">SET ZERO</button>
-    <button id = "btSTARTSAVE" onclick="startsave();">Start Save</button>
-    <button id = "btSTOPSAVE" onclick="stopsave();">Stop Save</button>
-    <br><br><br>
     <a href="/Data.txt">Download Data</a>
     <br><br>
     <a href="/Zero.txt">Download Zero File</a>
     <br><br>
     <button id = "btCLOSEWS" onclick="websock.close();">Close Websocket</button>
-    
+    <br>
+        <table id="sensortable">
+        <tr id = "tableheadings">
+            <td class = "td-hidden">MacAddr</td>
+            <td>Name</td>
+            <td class = "td-hidden">RawReading</td>
+            <td class = "td-hidden">CalibrationFactor</td>
+            <td>Reading</td>
+            <td>Battery</td>
+            <td>Timestamp</td>
+            <td class = "td-actions">Actions</td>
+            </tr>
+        </table>
+        
+        <datalist id="availablesensors">
+</datalist>
+        
   </body>
   
 </html>
-
 
 )rawliteral";
 
