@@ -23,6 +23,7 @@
                 //Will be obsolete once the code for requesting these values from the server are written
                  var calibrationfactor;
                     var    zerorawvalue;
+                var mycurrentrawvalues={};
 				var websock;
 				var boolClientactive;
 				var boolHasZeroBeenDone = false;
@@ -109,7 +110,10 @@
 }
       
                 function handlecleanedupdata(macaddr,rawreading,battery,mytime){
-                var mydatalist = document.getElementById("availablesensors");
+                  //create or update an entry in to the rawvalues dict and add the current values
+                      mycurrentrawvalues[macaddr]=[rawreading,battery,mytime];
+                    
+                    var mydatalist = document.getElementById("availablesensors");
                   var n;
                   var alreadypresent="false";
                   for (n=0;n<mydatalist.options.length;n++)
@@ -117,6 +121,8 @@
                           if (macaddr == mydatalist.options[n].value){
                           //Don't add if the macaddr already in the list
                           alreadypresent="true"
+                            
+                              
                         // Table must already have been expanded so just fill up the data
                               //Fill up the columns with data
                       document.getElementById("addr"+macaddr).innerHTML=macaddr;
@@ -134,6 +140,7 @@
                     // Data being received from a MAC address which isn't alreadypresent in the list
                   if (alreadypresent=="false"){
                       
+                    
                       //Add this MAC address to the list of all online MAC addresses 
                       const newele0=document.createElement("Option");
                         newele0.value=macaddr;
@@ -143,10 +150,10 @@
                         zerorawvalue = -811493;
                       //Expand the sensortable to add another row with children whose id is assigned by concatenating macaddress
                         const newele1=document.createElement("tr");
-                        newele1.setAttribute("id",macaddr);
+                        newele1.setAttribute("id","row"+macaddr);
                         var mytable = document.getElementById("sensortable");
                         mytable.appendChild(newele1);
-                        var myrow = document.getElementById(macaddr);
+                        var myrow = document.getElementById("row"+macaddr);
                       //Add columns to the new row
                         const newele2 = document.createElement("td");
                         newele2.setAttribute("id","addr"+macaddr);
@@ -187,8 +194,10 @@
                       const newele7 = document.createElement("button");
                       newele7.setAttribute("id","zero"+macaddr);
                       newele7.innerHTML="Zero";
+                      newele7.setAttribute("onclick","tarescale('"+macaddr+"')");
                       const newele8 = document.createElement("button");
                       newele8.setAttribute("id","calibrate"+macaddr);
+                      newele8.setAttribute("onclick","calibratescale('"+macaddr+"')");
                       newele8.innerHTML="Calibrate";
                       document.getElementById("actions"+macaddr).appendChild(newele7);
                       document.getElementById("actions"+macaddr).appendChild(newele8);
@@ -199,24 +208,19 @@
                 }
                 
                 
-			function startsave()
+			function tarescale(macaddr)
 			{
-				if(boolHasZeroBeenDone){
-					var decision = confirm("This will overwrite previous data.\n Press OK to proceed, Cancel to abort and Download data");
-					if (decision){
-						
-						fnButton('STARTSAVE');
-						/*Disable start save button and enable stop save button
-						 Ideally - server should send whether it is currently saving data or not
-						 */
-						document.getElementById("btSTARTSAVE").disabled=true;
-						document.getElementById("btZERO").disabled=true;
-						document.getElementById("btSTOPSAVE").disabled=false;
-					} else {
-						/*user selected cancel - let's redirect user to download the data*/
-						
-					}
-				} else { alert("Set Zero Before Saving")}
+				//alert(macaddr);
+                //Store raw value from each macadrr in an associative array or dict = myrawvalues{}.
+                //sendback the macaddr, rawvalue and timestamp
+			}
+            function calibratescale(macaddr)
+			{
+				//alert(macaddr);
+                //retrive cal factor for this mac addr from the server
+                //Show cal factore to the user
+                //If user changes the cal factor - 
+                //sendback the macaddr, calfactor and timestamp.
 			}
 			function stopsave(){
 				
