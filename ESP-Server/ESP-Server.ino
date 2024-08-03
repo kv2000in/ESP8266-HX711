@@ -1,4 +1,5 @@
 /*
+ * ESP-01 Formfactor - 1 blue LED
 19:33:54.810 -> Flash real id:   00144020
 19:33:54.810 -> Flash real size: 1048576 bytes
 19:33:54.810 -> 
@@ -6,6 +7,17 @@
 19:33:54.810 -> Flash ide speed: 40000000 Hz
 19:33:54.810 -> Flash ide mode:  DIO
 19:33:54.846 -> Flash Chip configuration ok
+
+ESP-12 Formfctor
+19:39:53.826 -> Flash real id:   001640E0
+19:39:53.826 -> Flash real size: 4194304 bytes
+19:39:53.826 -> 
+19:39:53.826 -> Flash ide  size: 4194304 bytes
+19:39:53.826 -> Flash ide speed: 40000000 Hz
+19:39:53.827 -> Flash ide mode:  DIO
+19:39:53.827 -> Flash Chip configuration ok.
+19:39:53.859 -> 
+
 
 SPIFFS 31 char filename limit
 
@@ -28,17 +40,20 @@ Sort out tare, what to store, taring/zeroing etc.
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include "FS.h"
+//#include "FS.h" //LittleFS
+#include "LittleFS.h"
 #include <ArduinoOTA.h>
 #include <string.h>
 #include <espnow.h>
+//#include <SPIFFS.h>
+//#include <SPIFFSEditor.h>
 
 char mydata[8]; 
 char macaddr[6];
 float myfloatbytes;
 int myintbytes;
-long zerofactor=-817214; //not needed 
-int calibrationfactor=1;
+//long zerofactor=-817214; //not needed 
+//int calibrationfactor=1;
 int mytarereading=0;
 bool dataavailable = false;
 
@@ -82,452 +97,54 @@ const char *ssid = "ESP";
 const char *password = "monte123";
 
 
-
 AsyncWebServer server(80);
 AsyncWebSocket webSocket("/ws"); 
 
 unsigned long currESPSecs, currTime,timestamp, zeroTime;
 
-static const char PROGMEM INDEX_HTML[] = R"rawliteral(
-
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta name = "viewport" content = "width = device-width, initial-scale = 1.0, maximum-scale = 1.0, user-scalable=0">
-      <title>Transducer Height Project</title>
-      <style>
-        "body { background-color: #808080; font-family: Arial, Helvetica, Sans-Serif; Color: #000000; }"
-        </style>
-      <style>
-
-                td{
-                    border: groove;
-                }
-                .td-hidden{
-                    display: none;
-                }
-                .td-actions{
-                    visibility: visible;
-                }
-      </style>
-      <script>
-                //Will be obsolete once the code for requesting these values from the server are written
-                 var calibrationfactor;
-                    var    zerorawvalue;
-        var websock;
-        var boolClientactive;
-        var boolHasZeroBeenDone = false;
-        
-        function start() {
-          websock = new WebSocket('ws://' + window.location.hostname + '/ws');
-                    websock.binaryType = "arraybuffer"; //need to do this when dealing with binary data.
-          websock.onopen = function(evt) { console.log('websock open');
-            
-            
-            
-          };
-          websock.onclose = function(evt) { console.log('websock close'); };
-          websock.onerror = function(evt) { console.log(evt); };
-          websock.onmessage = function(evt) {
-            console.log(evt);
-                           if(evt.data instanceof ArrayBuffer) {
-                                // binary frame
-                    //const view = new DataView(evt.data);
-                    //console.log(view.getInt32(0));
-                    
-                        handleserverbinarydata(evt.data);
-                           } else {
-                    // text frame
-                        console.log(evt.data);
-                    }
-
-          };
-          
-          
-        }
-      
-
-      function doSend(message)
-      {
-        console.log("sent: " + message + '\n');
-        /* writeToScreen("sent: " + message + '\n'); */
-        websock.send(message);
-      }
-      function fnButton(com){
-        
-        doSend("COMMAND-"+com);
-        
-      };
-      function download(file){
-        
-        
-      }
-      function zero(){
-        if (boolClientactive){
-          fnButton('ZERO');
-          boolHasZeroBeenDone = true; 
-        }
-        else {
-          alert("No client data - ?Client not connected"); 
-        }
-      }
-                
-            function handleserverbinarydata(serverbinarydata){
-                //16 bytes of data = 6 for mac + 8 for data(really just 6 for data - 4 for float and 2 for int+2 extra) + 2 extra
-                var mybinarydataarray= new Uint8Array(serverbinarydata);
-                var mysendermacaddress = mybinarydataarray.slice(0,6);
-                var myscalefloatvaluebytes = serverbinarydata.slice(6,10); 
-                var mybatteryvoltagebytes = serverbinarydata.slice(10,12);
-                var myfloatview = new DataView(myscalefloatvaluebytes);
-                var myintview = new DataView(mybatteryvoltagebytes);
-                var myscalefloatvalue = myfloatview.getFloat32(0,true); // Signed 32 bit float, little endian. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView/getFloat32
-                var mybatteryvoltage = myintview.getInt16(0,true);
-               //Generate timestamp for this data
-                var today = new Date();
-                var date = today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
-                var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
-                var dateTime = date+' '+time;
-            //call the data handler routine
-                handlecleanedupdata(buf2hex(mysendermacaddress),myscalefloatvalue,mybatteryvoltage,dateTime);
-            
-            }
-      //https://stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex
-                
-            function buf2hex(buffer) { // buffer is an ArrayBuffer
-  return [...new Uint8Array(buffer)]
-      .map(x => x.toString(16).padStart(2, '0'))
-      .join('');
-}
-      
-                function handlecleanedupdata(macaddr,rawreading,battery,mytime){
-                var mydatalist = document.getElementById("availablesensors");
-                  var n;
-                  var alreadypresent="false";
-                  for (n=0;n<mydatalist.options.length;n++)
-                      {
-                          if (macaddr == mydatalist.options[n].value){
-                          //Don't add if the macaddr already in the list
-                          alreadypresent="true"
-                        // Table must already have been expanded so just fill up the data
-                              //Fill up the columns with data
-                      document.getElementById("addr"+macaddr).innerHTML=macaddr;
-                      //User assignment of names - may be store it on the server
-                      document.getElementById("rawreading"+macaddr).innerHTML=rawreading;
-                    document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvalue)/100)*calibrationfactor);
-                      document.getElementById("battery"+macaddr).innerHTML=battery;
-                      document.getElementById("time"+macaddr).innerHTML=mytime;
-                              
-                              
-                              break;
-                          }
-
-                      }
-                    // Data being received from a MAC address which isn't alreadypresent in the list
-                  if (alreadypresent=="false"){
-                      
-                      //Add this MAC address to the list of all online MAC addresses 
-                      const newele0=document.createElement("Option");
-                        newele0.value=macaddr;
-                        mydatalist.appendChild(newele0);
-                      //Request stored calibration factor and zero level value from the server
-                        calibrationfactor = 500/285; //Actual weight/Displayed weight when calibration factor = 1.
-                        zerorawvalue = -811493;
-                      //Expand the sensortable to add another row with children whose id is assigned by concatenating macaddress
-                        const newele1=document.createElement("tr");
-                        newele1.setAttribute("id",macaddr);
-                        var mytable = document.getElementById("sensortable");
-                        mytable.appendChild(newele1);
-                        var myrow = document.getElementById(macaddr);
-                      //Add columns to the new row
-                        const newele2 = document.createElement("td");
-                        newele2.setAttribute("id","addr"+macaddr);
-                        newele2.setAttribute("class","td-hidden");
-                        const newele2a = document.createElement("td");
-                        newele2a.setAttribute("id","name"+macaddr);
-                        const newele3 = document.createElement("td");
-                        newele3.setAttribute("id","rawreading"+macaddr);
-                        newele3.setAttribute("class","td-hidden");
-                        const newele3a = document.createElement("td");
-                        newele3a.setAttribute("id","calibrationfactor"+macaddr);
-                        newele3a.setAttribute("class","td-hidden");
-                        const newele3b = document.createElement("td");
-                        newele3b.setAttribute("id","reading"+macaddr);
-                        const newele4 = document.createElement("td");
-                        newele4.setAttribute("id","battery"+macaddr);
-                        const newele5 = document.createElement("td");
-                        newele5.setAttribute("id","time"+macaddr);
-                        const newele6 = document.createElement("td");
-                        newele6.setAttribute("id","actions"+macaddr);
-                        newele6.setAttribute("class","td-actions");
-                        myrow.appendChild(newele2);
-                        myrow.appendChild(newele2a);
-                        myrow.appendChild(newele3);
-                        myrow.appendChild(newele3a);
-                        myrow.appendChild(newele3b);
-                        myrow.appendChild(newele4);
-                        myrow.appendChild(newele5);
-                        myrow.appendChild(newele6);
-                      //Fill up the columns with data
-                      document.getElementById("addr"+macaddr).innerHTML=macaddr;
-                      //User assignment of names - may be store it on the server
-                      document.getElementById("rawreading"+macaddr).innerHTML=rawreading;
-                       document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvalue)/100)*calibrationfactor);
-                      document.getElementById("battery"+macaddr).innerHTML=battery;
-                      document.getElementById("time"+macaddr).innerHTML=mytime;
-                      //Actions Zero/Tare, Calibrate
-                      const newele7 = document.createElement("button");
-                      newele7.setAttribute("id","zero"+macaddr);
-                      newele7.innerHTML="Zero";
-                      const newele8 = document.createElement("button");
-                      newele8.setAttribute("id","calibrate"+macaddr);
-                      newele8.innerHTML="Calibrate";
-                      document.getElementById("actions"+macaddr).appendChild(newele7);
-                      document.getElementById("actions"+macaddr).appendChild(newele8);
-                  }
-                    
-                    
-                    
-                }
-                
-                
-      function startsave()
-      {
-        if(boolHasZeroBeenDone){
-          var decision = confirm("This will overwrite previous data.\n Press OK to proceed, Cancel to abort and Download data");
-          if (decision){
-            
-            fnButton('STARTSAVE');
-            /*Disable start save button and enable stop save button
-             Ideally - server should send whether it is currently saving data or not
-             */
-            document.getElementById("btSTARTSAVE").disabled=true;
-            document.getElementById("btZERO").disabled=true;
-            document.getElementById("btSTOPSAVE").disabled=false;
-          } else {
-            /*user selected cancel - let's redirect user to download the data*/
-            
-          }
-        } else { alert("Set Zero Before Saving")}
-      }
-      function stopsave(){
-        
-        fnButton('STOPSAVE');
-        document.getElementById("btSTARTSAVE").disabled=false;
-        document.getElementById("btZERO").disabled=false;
-        document.getElementById("btSTOPSAVE").disabled=true;
-      }
-      function sendTimestamp(){
-        
-        /*Send timestamp in milliseconds when connected */
-        var d = new Date();
-        var n = (d.getTime()/1000);
-        doSend("TIME-"+n);
-      }
-      </script>
-  </head>
-  <body onpageshow="javascript:start();">
-    <!--
-Server keeps the calibration data (based on MAC addresses)
-Server keeps track of raw values at the time of Tare
-Server returns data as 
-
-
--->
-        
-    <div><b>Digital Scale Server</b></div> 
-    <label>Available Scales</label>
-        <input list="availablesensors">
-    
-    <a href="/Data.txt">Download Data</a>
-    <br><br>
-    <a href="/Zero.txt">Download Zero File</a>
-    <br><br>
-    <button id = "btCLOSEWS" onclick="websock.close();">Close Websocket</button>
-    <br>
-        <table id="sensortable">
-        <tr id = "tableheadings">
-            <td class = "td-hidden">MacAddr</td>
-            <td>Name</td>
-            <td class = "td-hidden">RawReading</td>
-            <td class = "td-hidden">CalibrationFactor</td>
-            <td>Reading</td>
-            <td>Battery</td>
-            <td>Timestamp</td>
-            <td class = "td-actions">Actions</td>
-            </tr>
-        </table>
-        
-        <datalist id="availablesensors">
-</datalist>
-        
-  </body>
-  
-</html>
-
-)rawliteral";
-
-
-
-
-//void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length)
-//{
-//  Serial.printf("webSocketEvent(%d, %d, ...)\r\n", num, type);
-//  switch(type) {
-//    case WStype_DISCONNECTED:
-//      Serial.printf("[%u] Disconnected!\r\n", num);
-//      break;
-//    case WStype_CONNECTED:
-//      {
-//        IPAddress ip = webSocket.remoteIP(num);
-//        Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\r\n", num, ip[0], ip[1], ip[2], ip[3], payload);
-//      //itoa( cm, str, 10 );
-//      //  webSocket.sendTXT(num, str, strlen(str));
-//      }
-//      break;
-//    case WStype_TEXT:
-//    {
-//      //Serial.printf("[%u] get Text: %s\r\n", num, payload);
-//
-//      //Payload will be in the form of 3 alphapets and 3 digits
-//      //DATA-105 means it is Data and value is 105
-//      //COMMAND-ZERO means Command ZERO
-//      //TIME-12345678 means epoch timestamp in seconds
-//      
-//      char *split1,*split2 ;
-//     char *mystring = (char *)payload;
-//      split1=subStr(mystring, "-", 1);
-//      split2=subStr(mystring, "-", 2);
-//      
-//      if (strcmp(split1,"COMMAND") == 0)
-//        {
-//          //Serial.println("Received Command");
-//          //Serial.println(split2);
-//          if (strcmp(split2,"ZERO") == 0){
-//           // Serial.println("Zero command received");
-////            if (!clientHeight){
-////              Serial.println("No client data");
-////              } else {
-////            ZeroOffset=serverHeight-clientHeight;
-////            zeroTime=timestamp+((millis()/1000)-currESPSecs);
-////            //Serial.println(currTime);
-////            File f = SPIFFS.open("/Zero.txt", "w");
-////            f.print("Time:");
-////            f.print(zeroTime);
-////            f.print("\n");
-////            f.print("ZeroOffset:");
-////            f.print(ZeroOffset);
-////            f.print("\n");
-////            f.close();
-////            //Reset the currESPsecs to current millis at the zerotime
-////            //So the data save time will be zero time + secs elapsed since zero time
-////            currESPSecs = millis()/1000;
-////            
-////            }
-//          } else if (strcmp(split2,"STARTSAVE") == 0){
-//            
-//            if (!saveData){
-//              saveData=true;
-//            File f = SPIFFS.open("/Data.txt", "w");
-//            f.close();
-//            //Create a file which keeps log of current saving process
-//            File s = SPIFFS.open("/Save.txt", "w");
-//            s.print("Y");
-//            s.close();
-//            }
-//            
-//            } 
-//
-//            else if (strcmp(split2,"STOPSAVE") == 0) 
-//            {
-//              if (saveData){saveData=false;
-//                File s = SPIFFS.open("/Save.txt", "w");
-//                s.print("N");
-//                s.close();
-//              }
-//              }
-//
-//             
-//            else if (strcmp(split2,"RUSAVING") == 0) 
-//            {
-//              if (saveData){
-//                webSocket.sendTXT(num, "Y");
-//                } else {
-//                  
-//                webSocket.sendTXT(num, "N");  
-//                  }
-//              }
-//
-//        
-//        } 
-//      else if (strcmp(split1,"DATA") == 0)
-//        {
-//          //Serial.println("Received Data");
-//          //Serial.println(split2);
-//          //clientHeight=atoi(split2);
-//          if (saveData){
-//          //currTime=timestamp+((millis()/1000)-currESPSecs);
-//          currTime=((millis()/1000)-currESPSecs);
-//          File f = SPIFFS.open("/Data.txt", "a");
-//          f.print(currTime);
-//          f.print(":");
-//          f.print("C:");
-//          //f.print(clientHeight);
-//          f.print("\n");
-//          f.close();
-//          }
-//          if(broadcast){
-//           webSocket.broadcastTXT(split2, strlen(split2));
-//            } else {
-//              //If not broadcast - send to browser client num =1
-//              webSocket.sendTXT(1,split2, strlen(split2));
-//              
-//              }
-//          
-//        } 
-//      else if (strcmp(split1,"TIME") == 0)
-//        {
-//          //Serial.println("Received TimeStamp");
-//          //Serial.println(split2);
-//          timestamp=atol(split2);
-//          //currTime=split2;
-//          currESPSecs = millis()/1000;
-//          //Serial.println(timestamp);
-//          //Serial.println(currESPSecs);
-//        }
-//      else 
-//      {
-//          Serial.printf("Unknown-");
-//          Serial.printf("[%u] get Text: %s\r\n", num, payload);
-//          // send data to all connected clients
-//          //webSocket.broadcastTXT(payload, length);
-//      }
-//    }
-//    // clientHeight=atoi((const char *)payload);
-//     // Serial.println((const char *)payload);
-//     // itoa( cm, str, 10 );
-//      // webSocket.sendTXT(0, str, strlen(str));
-//      break;
-//    case WStype_BIN:
-//      Serial.printf("[%u] get binary length: %u\r\n", num, length);
-//      hexdump(payload, length);
-//
-//      // echo data back to browser
-//      webSocket.sendBIN(num, payload, length);
-//      break;
-//    default:
-//      Serial.printf("Invalid WStype [%d]\r\n", type);
-//      break;
-//  }
-//}
 void handlecommandsfromwebsocketclients(char * datasentbywebsocketclient){
   //Commands will include the MAC Address - Tare or MAC Address - save common name or MAC Address 
   }
+
+//flag to use from web update to reboot the ESP
+bool shouldReboot = false;
+
+void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
+  //Handle body
+}
+File p;
+void onUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
+  //Handle upload
+   
+    if(!index){
+      Serial.printf("UploadStart: %s\n", filename.c_str());
+       p = LittleFS.open(filename, "w");
+    }
+      Serial.printf("UploadStart: (%u), (%u)\n", index, len);
+   p.seek(index, SeekSet);
+   Serial.printf("File position = %u",p.position());
+   for(size_t i=0; i<len; i++){
+   p.write(data[i]);
+   
+    
+  }
+      
+    if(final)
+      {
+        Serial.printf("UploadEnd: %s (%u)\n", filename.c_str(), index+len);
+      request->send (200, "text/plain", String (index+len));
+      p.close();
+      }
+}
+
+
 
 void onEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
   if(type == WS_EVT_CONNECT){
     //client connected
     os_printf("ws[%s][%u] connect\n", server->url(), client->id());
-    client->printf("Hello Client %u :)", client->id());
+    client->printf("Z#a020a60a86ce|-811493|2022-4-12 21:33:49");
+    client->printf("C#a020a60a86ce|500/285|2022-4-12 21:33:49"); 
     client->ping();
   } else if(type == WS_EVT_DISCONNECT){
     //client disconnected
@@ -595,8 +212,9 @@ void onEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTyp
 
 int fractionoccupiedspaceonfilesystem(){
 FSInfo fs_info;
-SPIFFS.info(fs_info);
-return fs_info.usedBytes/fs_info.totalBytes; 
+LittleFS.info(fs_info);
+return fs_info.usedBytes;
+//fs_info.totalBytes 
   
   }
 
@@ -640,9 +258,7 @@ void setscaletare(char *scalemacaddr, char *currentscalerawreading){
   }
 
 
-void notFound(AsyncWebServerRequest *request) {
-    request->send(404, "text/plain", "Not found");
-}
+
 void setup()
 { 
 
@@ -654,7 +270,7 @@ void setup()
   Serial.println();
   Serial.println();
   Serial.println();
-
+WiFi.mode(WIFI_STA);
   for(uint8_t t = 4; t > 0; t--) {
     Serial.printf("[SETUP] BOOT WAIT %d...\r\n", t);
     Serial.flush();
@@ -684,32 +300,155 @@ Serial.printf("MAC address = %s\n", WiFi.softAPmacAddress().c_str());
 
       
 
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(200, "text/html", INDEX_HTML);
-     
+//    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+//        //request->send(200, "text/html", INDEX_HTML);
+//   request->send(200, "text/html", "HELLO WORLD");
+//    
+//    });
+
+
+
+
+
+      // respond to GET requests on URL /heap
+  server.on("/heap", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "text/plain", String(ESP.getFreeHeap()));
+  });
+
+  server.on("/upload", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.printf("%u \n",fractionoccupiedspaceonfilesystem());
+    request->send(200, "text/html", "<p>Available space="+String (fractionoccupiedspaceonfilesystem())+"</p><br><br><br><form method='POST' action='/upload' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>");
+  });
+  // upload a file to /upload
+  server.on("/upload", HTTP_POST, [](AsyncWebServerRequest *request){
     
-    });
+  }, onUpload);
+
+  // send a file when /index is requested
+  server.on("/index", HTTP_GET, [](AsyncWebServerRequest *request){
+   AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/index.html");
+//response->addHeader("Last","ESP Async Web Server");
+//
+response->addHeader("ETag","33a64df551425fcc55e4d42a148795d9f25f89d4");
+response->addHeader("Last-Modified","Mon, 17 Apr 2022 14:00:00 GMT");
+request->send(response); 
+   //
+  });
+
+
+  // Simple Firmware Update Form
+  server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "text/html", "<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>");
+  });
+  server.on("/update", HTTP_POST, [](AsyncWebServerRequest *request){
+    shouldReboot = !Update.hasError();
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", shouldReboot?"OK":"FAIL");
+    response->addHeader("Connection", "close");
+    request->send(response);
+  },[](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
+    if(!index){
+      Serial.printf("Update Start: %s\n", filename.c_str());
+      Update.runAsync(true);
+      if(!Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000)){
+        Update.printError(Serial);
+      }
+    }
+    if(!Update.hasError()){
+      if(Update.write(data, len) != len){
+        Update.printError(Serial);
+      }
+    }
+    if(final){
+      if(Update.end(true)){
+        Serial.printf("Update Success: %uB\n", index+len);
+      } else {
+        Update.printError(Serial);
+      }
+    }
+  });
+
+  // attach filesystem root at URL /fs
+  //server.serveStatic("/fs", LittleFS, "/data/");
+  //server.serveStatic("/", LittleFS,"/data/index.html").setLastModified("Mon, 17 Apr 2022 14:00:00 GMT");
+
+//AsyncStaticWebHandler* handler = &server.serveStatic("/", LittleFS, "/index.html").setLastModified("Mon, 17 Apr 2022 14:00:00 GMT");
+server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
+server.serveStatic("/", LittleFS, "/").setLastModified("Mon, 17 Apr 2022 14:00:00 GMT");
+//server.serveStatic("/", LittleFS, "index.html").setLastModified("Mon, 17 Apr 2022 14:00:00 GMT");
+
+server.onNotFound([](AsyncWebServerRequest *request){
+    Serial.printf("NOT_FOUND: ");
+    if(request->method() == HTTP_GET)
+      Serial.printf("GET");
+    else if(request->method() == HTTP_POST)
+      Serial.printf("POST");
+    else if(request->method() == HTTP_DELETE)
+      Serial.printf("DELETE");
+    else if(request->method() == HTTP_PUT)
+      Serial.printf("PUT");
+    else if(request->method() == HTTP_PATCH)
+      Serial.printf("PATCH");
+    else if(request->method() == HTTP_HEAD)
+      Serial.printf("HEAD");
+    else if(request->method() == HTTP_OPTIONS)
+      Serial.printf("OPTIONS");
+    else
+      Serial.printf("UNKNOWN");
+    Serial.printf(" http://%s%s\n", request->host().c_str(), request->url().c_str());
+
+    if(request->contentLength()){
+      Serial.printf("_CONTENT_TYPE: %s\n", request->contentType().c_str());
+      Serial.printf("_CONTENT_LENGTH: %u\n", request->contentLength());
+    }
+
+    int headers = request->headers();
+    int i;
+    for(i=0;i<headers;i++){
+      AsyncWebHeader* h = request->getHeader(i);
+      Serial.printf("_HEADER[%s]: %s\n", h->name().c_str(), h->value().c_str());
+    }
+
+    int params = request->params();
+    for(i=0;i<params;i++){
+      AsyncWebParameter* p = request->getParam(i);
+      if(p->isFile()){
+        Serial.printf("_FILE[%s]: %s, size: %u\n", p->name().c_str(), p->value().c_str(), p->size());
+      } else if(p->isPost()){
+        Serial.printf("_POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
+      } else {
+        Serial.printf("_GET[%s]: %s\n", p->name().c_str(), p->value().c_str());
+      }
+    }
+
+    request->send(404);
+  });
+
+
+  
+  server.onRequestBody([](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
+    if(!index)
+      Serial.printf("BodyStart: %u\n", total);
+    Serial.printf("%s", (const char*)data);
+    if(index + len == total)
+      Serial.printf("BodyEnd: %u\n", total);
+  });
 
  webSocket.onEvent(onEvent);
   server.addHandler(&webSocket);
   server.begin();
-  server.onNotFound(notFound);
+  //server.onNotFound(notFound);
 
 
 
 
 
-  if (SPIFFS.begin()){Serial.println("file system mounted");};
+  if (LittleFS.begin()){Serial.println("file system mounted");};
 
-  //Open the "Save.txt" file and check if we were saving before the reset happened
-  File q = SPIFFS.open("/Save.txt", "r");
-  if (q.find("Y")){//saveData=true;
-    }
-  q.close();
+
   
   
   
-  /* ************OTA********************* */
+  /* ************OTA-Update********************* */
 
 // Port defaults to 8266
 // ArduinoOTA.setPort(8266);
@@ -740,7 +479,7 @@ else if (error == OTA_END_ERROR) Serial1.println("End Failed");
 */
 });
 ArduinoOTA.begin();
-
+  
 /****************************************************/  
   
   
@@ -749,8 +488,13 @@ ArduinoOTA.begin();
 
 void loop()
 {
+  if(shouldReboot){
+    Serial.println("Rebooting...");
+    delay(100);
+    ESP.restart();
+  }
  
-  
+  ArduinoOTA.handle();
 if (dataavailable){handledatafromnodes(macaddr,mydata);}
-
+webSocket.cleanupClients();
 }

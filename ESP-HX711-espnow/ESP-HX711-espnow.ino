@@ -15,7 +15,8 @@
 #include <espnow.h>
 #include "HX711.h"
 // Mac address of the slave
-uint8_t peer0[] = {0x86, 0xCC, 0xA8, 0xAA, 0x20, 0xF9};//86:CC:A8:AA:20:F9 softAP MAC of server
+//uint8_t peer0[] = {0x86, 0xCC, 0xA8, 0xAA, 0x20, 0xF9};//86:CC:A8:AA:20:F9 softAP MAC of server
+uint8_t peer0[] = {0xA2, 0x20, 0xA6, 0x0A, 0x27, 0x1C};//A2:20:A6:0A:27:1C softAP MAC of server ESP12 4MB flash marked S
 int batteryVoltage; //Can either use ADC or ESP.getVcc(). ADC has to be floating for getVcc to work. 
 
 // HX711 circuit wiring

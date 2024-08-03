@@ -20,17 +20,20 @@
                 }
 			</style>
 			<script>
-                //Will be obsolete once the code for requesting these values from the server are written
-                 var calibrationfactor;
-                    var    zerorawvalue;
+                /*Will be obsolete once the code for requesting these values from the server are written */
+                var zerorawvaluedict={}; 
+                var calibrationfactordict={};
                 var mycurrentrawvalues={};
+                var mymsgtosend;
 				var websock;
 				var boolClientactive;
-				var boolHasZeroBeenDone = false;
+                var boolHasZeroBeenDone = false;
 				
 				function start() {
-					websock = new WebSocket('ws://' + window.location.hostname + '/ws');
-                    websock.binaryType = "arraybuffer"; //need to do this when dealing with binary data.
+					
+                    /*websock = new WebSocket('ws://' + window.location.hostname + '/ws'); Change to this once done debugging */
+                    websock = new WebSocket('ws://192.168.4.1/ws');
+                    websock.binaryType = "arraybuffer"; /*need to do this when dealing with binary data.*/
 					websock.onopen = function(evt) { console.log('websock open');
 						
 						
@@ -39,16 +42,23 @@
 					websock.onclose = function(evt) { console.log('websock close'); };
 					websock.onerror = function(evt) { console.log(evt); };
 					websock.onmessage = function(evt) {
-						console.log(evt);
+
                            if(evt.data instanceof ArrayBuffer) {
-                                // binary frame
-                    //const view = new DataView(evt.data);
-                    //console.log(view.getInt32(0));
-                    
+                                /*binary frame
+                    const view = new DataView(evt.data);
+                    console.log(view.getInt32(0));
+                    */
                         handleserverbinarydata(evt.data);
                            } else {
-                    // text frame
-                        console.log(evt.data);
+                    /* text frame*/
+                        console.log("Text-Data");
+                  /*  Need to send zero/tare values, calibration factors for all known mac addresses stored on the server.
+                        Data from server Z#macaddr|zerorawvalue|timestamp
+                               C#macaddr|calibrationfactor|timestamp*/
+                               handleservertextdata(evt.data);
+                            /*   Data to server => Z#macaddr|zerorawvalue|timestamp
+                               C#macaddr|calibrationfactor|timestamp */
+                               
                     }
 
 					};
@@ -63,54 +73,49 @@
 				/* writeToScreen("sent: " + message + '\n'); */
 				websock.send(message);
 			}
-			function fnButton(com){
-				
-				doSend("COMMAND-"+com);
-				
-			};
-			function download(file){
-				
-				
-			}
-			function zero(){
-				if (boolClientactive){
-					fnButton('ZERO');
-					boolHasZeroBeenDone = true; 
-				}
-				else {
-					alert("No client data - ?Client not connected"); 
-				}
-			}
+            
+                function handleservertextdata(servertextdata){
+                    /*Z#macaddr|zerorawvalue|timestamp */
+                  var myservertextdatasliced = servertextdata.split("#");
+                    switch(myservertextdatasliced[0]){
+                        case 'Z':
+                            zerorawvaluedict[myservertextdatasliced[1].split("|")[0]]=[myservertextdatasliced[1].split("|")[1],myservertextdatasliced[1].split("|")[2]];
+                        case 'C':
+                            calibrationfactordict[myservertextdatasliced[1].split("|")[0]]=[myservertextdatasliced[1].split("|")[1],myservertextdatasliced[1].split("|")[2]];
+                        default:
+                            console.log(myservertextdatasliced[0]);
+                    }
+                }
                 
             function handleserverbinarydata(serverbinarydata){
-                //16 bytes of data = 6 for mac + 8 for data(really just 6 for data - 4 for float and 2 for int+2 extra) + 2 extra
+                /*16 bytes of data = 6 for mac + 8 for data(really just 6 for data - 4 for float and 2 for int+2 extra) + 2 extra */
                 var mybinarydataarray= new Uint8Array(serverbinarydata);
                 var mysendermacaddress = mybinarydataarray.slice(0,6);
                 var myscalefloatvaluebytes = serverbinarydata.slice(6,10); 
                 var mybatteryvoltagebytes = serverbinarydata.slice(10,12);
                 var myfloatview = new DataView(myscalefloatvaluebytes);
                 var myintview = new DataView(mybatteryvoltagebytes);
-                var myscalefloatvalue = myfloatview.getFloat32(0,true); // Signed 32 bit float, little endian. https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView/getFloat32
+                var myscalefloatvalue = myfloatview.getFloat32(0,true); /* Signed 32 bit float, little endian. https:/developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView/getFloat32*/
                 var mybatteryvoltage = myintview.getInt16(0,true);
-               //Generate timestamp for this data
+               /*Generate timestamp for this data*/
                 var today = new Date();
                 var date = today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
                 var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
                 var dateTime = date+' '+time;
-            //call the data handler routine
+            /*call the data handler routine*/
                 handlecleanedupdata(buf2hex(mysendermacaddress),myscalefloatvalue,mybatteryvoltage,dateTime);
             
             }
-			//https://stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex
+			/* https:/stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex*/
                 
-            function buf2hex(buffer) { // buffer is an ArrayBuffer
+            function buf2hex(buffer) { /* buffer is an ArrayBuffer*/
   return [...new Uint8Array(buffer)]
       .map(x => x.toString(16).padStart(2, '0'))
       .join('');
 }
       
                 function handlecleanedupdata(macaddr,rawreading,battery,mytime){
-                  //create or update an entry in to the rawvalues dict and add the current values
+                  /*create or update an entry in to the rawvalues dict and add the current values*/
                       mycurrentrawvalues[macaddr]=[rawreading,battery,mytime];
                     
                     var mydatalist = document.getElementById("availablesensors");
@@ -119,16 +124,16 @@
                   for (n=0;n<mydatalist.options.length;n++)
                       {
                           if (macaddr == mydatalist.options[n].value){
-                          //Don't add if the macaddr already in the list
+                          /*Don't add if the macaddr already in the list*/
                           alreadypresent="true"
                             
                               
-                        // Table must already have been expanded so just fill up the data
-                              //Fill up the columns with data
+                        /* Table must already have been expanded so just fill up the data
+                              Fill up the columns with data*/
                       document.getElementById("addr"+macaddr).innerHTML=macaddr;
-                      //User assignment of names - may be store it on the server
+                      /*User assignment of names - may be store it on the server*/
                       document.getElementById("rawreading"+macaddr).innerHTML=rawreading;
-                    document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvalue)/100)*calibrationfactor);
+                    document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvaluedict[macaddr][0])/100)*eval(calibrationfactordict[macaddr][0])); /*eval is dangerous*/
                       document.getElementById("battery"+macaddr).innerHTML=battery;
                       document.getElementById("time"+macaddr).innerHTML=mytime;
                               
@@ -137,24 +142,21 @@
                           }
 
                       }
-                    // Data being received from a MAC address which isn't alreadypresent in the list
+                    /* Data being received from a MAC address which isn't alreadypresent in the list*/
                   if (alreadypresent=="false"){
                       
                     
-                      //Add this MAC address to the list of all online MAC addresses 
+                      /*Add this MAC address to the list of all online MAC addresses */
                       const newele0=document.createElement("Option");
                         newele0.value=macaddr;
                         mydatalist.appendChild(newele0);
-                      //Request stored calibration factor and zero level value from the server
-                        calibrationfactor = 500/285; //Actual weight/Displayed weight when calibration factor = 1.
-                        zerorawvalue = -811493;
-                      //Expand the sensortable to add another row with children whose id is assigned by concatenating macaddress
+                      /*Expand the sensortable to add another row with children whose id is assigned by concatenating macaddress*/
                         const newele1=document.createElement("tr");
                         newele1.setAttribute("id","row"+macaddr);
                         var mytable = document.getElementById("sensortable");
                         mytable.appendChild(newele1);
                         var myrow = document.getElementById("row"+macaddr);
-                      //Add columns to the new row
+                      /*Add columns to the new row*/
                         const newele2 = document.createElement("td");
                         newele2.setAttribute("id","addr"+macaddr);
                         newele2.setAttribute("class","td-hidden");
@@ -183,14 +185,14 @@
                         myrow.appendChild(newele4);
                         myrow.appendChild(newele5);
                         myrow.appendChild(newele6);
-                      //Fill up the columns with data
+                      /*Fill up the columns with data*/
                       document.getElementById("addr"+macaddr).innerHTML=macaddr;
-                      //User assignment of names - may be store it on the server
+                      /*User assignment of names - may be store it on the server*/
                       document.getElementById("rawreading"+macaddr).innerHTML=rawreading;
-                       document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvalue)/100)*calibrationfactor);
+                       document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvaluedict[macaddr][0])/100)*eval(calibrationfactordict[macaddr][0]));/*eval is dangerous*/
                       document.getElementById("battery"+macaddr).innerHTML=battery;
                       document.getElementById("time"+macaddr).innerHTML=mytime;
-                      //Actions Zero/Tare, Calibrate
+                      /*Actions Zero/Tare, Calibrate*/
                       const newele7 = document.createElement("button");
                       newele7.setAttribute("id","zero"+macaddr);
                       newele7.innerHTML="Zero";
@@ -210,17 +212,20 @@
                 
 			function tarescale(macaddr)
 			{
-				//alert(macaddr);
-                //Store raw value from each macadrr in an associative array or dict = myrawvalues{}.
-                //sendback the macaddr, rawvalue and timestamp
+				/*alert(macaddr);
+                Store raw value from each macadrr in an associative array or dict = mycurrentrawvalues{} - stored as mycurrentrawvalues[macaddr]=[rawreading,battery,mytime];.
+                sendback the macaddr, rawvalue and timestamp*/
+                mymsgtosend="Z#"+macaddr+"|"+mycurrentrawvalues[macaddr][0]+"|"+mycurrentrawvalues[macaddr][2];
+                console.log(mymsgtosend);
 			}
             function calibratescale(macaddr)
 			{
-				//alert(macaddr);
-                //retrive cal factor for this mac addr from the server
-                //Show cal factore to the user
-                //If user changes the cal factor - 
-                //sendback the macaddr, calfactor and timestamp.
+				/*alert(macaddr);
+                retrive cal factor for this mac addr from the server
+                Show cal factore to the user
+                If user changes the cal factor - 
+                sendback the macaddr, calfactor and timestamp.*/
+                
 			}
 			function stopsave(){
 				

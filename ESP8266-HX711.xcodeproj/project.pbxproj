@@ -8,7 +8,6 @@
 
 /* Begin PBXFileReference section */
 		2A1C15BF26B72660003A9F91 /* ESP-HX711.ino */ = {isa = PBXFileReference; lastKnownFileType = text; name = "ESP-HX711.ino"; path = "ESP-HX711/ESP-HX711.ino"; sourceTree = "<group>"; };
-		2A1C15C026B726F1003A9F91 /* index.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = index.html; sourceTree = "<group>"; };
 		2A2591EF2756F810001CE4F1 /* ESP-Server */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "ESP-Server"; sourceTree = "<group>"; };
 		2A3335DD276EB605008C3E8A /* ESP-HX711-espnow */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "ESP-HX711-espnow"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -19,7 +18,6 @@
 			children = (
 				2A3335DD276EB605008C3E8A /* ESP-HX711-espnow */,
 				2A2591EF2756F810001CE4F1 /* ESP-Server */,
-				2A1C15C026B726F1003A9F91 /* index.html */,
 				2A1C15BF26B72660003A9F91 /* ESP-HX711.ino */,
 			);
 			sourceTree = "<group>";
