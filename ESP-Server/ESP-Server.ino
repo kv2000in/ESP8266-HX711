@@ -44,7 +44,10 @@ Sort out tare, what to store, taring/zeroing etc.
 #include <ArduinoOTA.h>
 #include <string.h>
 #include <espnow.h>
+#include <ESP8266mDNS.h>
 
+bool enablemDNSOTABS = false;
+bool fileOperationInProgress = false;
 
 char mydata[8]; 
 char macaddr[6];
@@ -102,12 +105,14 @@ AsyncWebSocket webSocket("/ws");
 unsigned long currESPSecs, currTime,timestamp, zeroTime;
 
 bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t bufferSize) {
+    fileOperationInProgress = true;
     Serial.println("Reading file");
 
 
     // Check if the file exists
     if (!LittleFS.exists(path)) {
         Serial.println("File not found");
+        fileOperationInProgress = false;
         return false;
     }
 
@@ -115,6 +120,7 @@ bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t b
     File file = LittleFS.open(path, "r");
     if (!file) {
         Serial.println("Failed to open file for reading");
+        fileOperationInProgress = false;
         return false;
     }
 
@@ -123,6 +129,7 @@ bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t b
     if (offset >= fileSize) {
         Serial.println("Offset exceeds file size");
         file.close();
+        fileOperationInProgress = false;
         return false;
     }
 
@@ -156,16 +163,19 @@ bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t b
 
     // Close the file
     file.close();
+    fileOperationInProgress = false;
     return true;
 }
 
 
 bool writeFileFromBuffer(const char* path, const char* buffer, size_t bufferSize) {
+    fileOperationInProgress = true;
     Serial.println("Writing file");
 
     // Check if LittleFS is mounted
     if (!LittleFS.begin()) {
         Serial.println("LittleFS not mounted");
+        fileOperationInProgress = false;
         return false;
     }
 
@@ -175,6 +185,7 @@ bool writeFileFromBuffer(const char* path, const char* buffer, size_t bufferSize
     File file = LittleFS.open(path, "w");
     if (!file) {
         Serial.println("Failed to open file for writing");
+        fileOperationInProgress = false;
         return false;
     }
 
@@ -182,6 +193,7 @@ bool writeFileFromBuffer(const char* path, const char* buffer, size_t bufferSize
     if (bufferSize == 0) {
         Serial.println("Buffer size is zero");
         file.close();
+        fileOperationInProgress = false;
         return false;
     }
 
@@ -189,14 +201,20 @@ bool writeFileFromBuffer(const char* path, const char* buffer, size_t bufferSize
     size_t written = file.write((const uint8_t*)buffer, bufferSize);
     if (written == bufferSize) {
         Serial.println("File written successfully");
+        fileOperationInProgress = false;
+         // Close the file
+        file.close();
         return true;
     } else {
         Serial.printf("Write failed, wrote %u bytes out of %u\n", written, bufferSize);
+        fileOperationInProgress = false;
+         // Close the file
+        file.close();
         return false;
     }
 
-    // Close the file
-    file.close();
+   
+ 
 
     
 
@@ -243,16 +261,25 @@ void handlecommandsfromwebsocketclients(uint8_t *datasentbywebsocketclient, size
   // Determine command type and file name
   if (datasentbywebsocketclient[12] == 'Z') {
     filename[6] = 'Z';
+       while (fileOperationInProgress){
+      delay(20);
+      }
     if(writeFileFromBuffer(filename, writebuffer, sizeof(writebuffer)))
     {Serial.println("File write success for 'Z' command");}
     webSocket.binaryAll(datasentbywebsocketclient, len);
   } else if (datasentbywebsocketclient[12] == 'C') {
     filename[6] = 'C';
+   while (fileOperationInProgress){
+     delay(20);
+     }
     if (writeFileFromBuffer(filename, writebuffer, sizeof(writebuffer)))
     {Serial.println("File write success for 'C' command");}
     webSocket.binaryAll(datasentbywebsocketclient, len);
   } else if (datasentbywebsocketclient[12] == 'z') {
     filename[6] = 'Z';
+    while (fileOperationInProgress){
+      delay(20);
+      }
     if (readFileToCharArray(filename, readbuffer, 0, sizeof(readbuffer))) {
      memcpy(sendbuffer+sizeof(nodeMacaddr),readbuffer, sizeof(readbuffer));
       webSocket.binaryAll(sendbuffer, sizeof(sendbuffer));
@@ -266,6 +293,9 @@ void handlecommandsfromwebsocketclients(uint8_t *datasentbywebsocketclient, size
     }
   } else if (datasentbywebsocketclient[12] == 'c') {
     filename[6] = 'C';
+     while (fileOperationInProgress){
+      delay(20);
+      }
     if (readFileToCharArray(filename, readbuffer, 0, sizeof(readbuffer))) {
       memcpy(sendbuffer+sizeof(nodeMacaddr),readbuffer, sizeof(readbuffer));
       webSocket.binaryAll(sendbuffer, sizeof(sendbuffer));
@@ -416,6 +446,7 @@ webSocket.binaryAll(tosend, 16);
 void setup()
 { 
 
+MDNS.end();
 
   Serial.begin(115200);
   delay(10);
@@ -590,7 +621,10 @@ ArduinoOTA.begin();
 void loop()
 
  {
+  if (enablemDNSOTABS){
+    MDNS.begin("espScaleServer");
   ArduinoOTA.handle();
+  }
 if (dataavailable){handledatafromnodes(macaddr,mydata);}
 webSocket.cleanupClients();
 // static unsigned long lastPrint = 0;
