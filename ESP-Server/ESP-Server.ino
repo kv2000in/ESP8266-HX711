@@ -49,6 +49,8 @@ Sort out tare, what to store, taring/zeroing etc.
 bool enablemDNSOTABS = false;
 bool fileOperationInProgress = false;
 
+
+
 char mydata[8]; 
 char macaddr[6];
 float myfloatbytes;
@@ -69,6 +71,16 @@ dataavailable = true;
 #define MAX_STRING_LEN  64
 
 
+  bool safetoaccessFS() {
+    unsigned long start = millis();
+    while (fileOperationInProgress) {
+        delay(10); // Wait for 10 milliseconds before checking again
+        if (millis() - start > 1000) { // Timeout after 1 second
+            return false;
+        }
+    }
+    return true;
+}
 
 // Function to return a substring defined by a delimiter at an index
 char* subStr (char* str, char *delim, int index) {
@@ -106,12 +118,12 @@ unsigned long currESPSecs, currTime,timestamp, zeroTime;
 
 bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t bufferSize) {
     fileOperationInProgress = true;
-    Serial.println("Reading file");
+    os_printf("Reading file");
 
 
     // Check if the file exists
     if (!LittleFS.exists(path)) {
-        Serial.println("File not found");
+        os_printf("File not found");
         fileOperationInProgress = false;
         return false;
     }
@@ -119,7 +131,7 @@ bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t b
     // Open the file for reading
     File file = LittleFS.open(path, "r");
     if (!file) {
-        Serial.println("Failed to open file for reading");
+        os_printf("Failed to open file for reading");
         fileOperationInProgress = false;
         return false;
     }
@@ -127,7 +139,7 @@ bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t b
     // Check file size
     size_t fileSize = file.size();
     if (offset >= fileSize) {
-        Serial.println("Offset exceeds file size");
+        os_printf("Offset exceeds file size");
         file.close();
         fileOperationInProgress = false;
         return false;
@@ -136,7 +148,7 @@ bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t b
     // Calculate the number of bytes to read
     size_t bytesToRead = fileSize - offset;
     if (bytesToRead > bufferSize) {
-        Serial.println("Buffer is too small for the remaining file data");
+        os_printf("Buffer is too small for the remaining file data");
         bytesToRead = bufferSize;
     }
 
@@ -153,12 +165,12 @@ bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t b
     if (bytesRead < bufferSize) {
         buffer[bytesRead] = '\0';
     } else if (bytesRead > bufferSize){
-        Serial.println("Buffer is not large enough for file data");
+        os_printf("Buffer is not large enough for file data");
     } else {
-        Serial.println("Buffer just right for file data");
+        os_printf("Buffer just right for file data");
     }
 
-    Serial.println("File read into buffer:");
+    os_printf("File read into buffer:");
 
 
     // Close the file
@@ -170,11 +182,11 @@ bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t b
 
 bool writeFileFromBuffer(const char* path, const char* buffer, size_t bufferSize) {
     fileOperationInProgress = true;
-    Serial.println("Writing file");
+    os_printf("Writing file");
 
     // Check if LittleFS is mounted
     if (!LittleFS.begin()) {
-        Serial.println("LittleFS not mounted");
+        os_printf("LittleFS not mounted");
         fileOperationInProgress = false;
         return false;
     }
@@ -184,14 +196,14 @@ bool writeFileFromBuffer(const char* path, const char* buffer, size_t bufferSize
     // Open the file for writing (creating it if it doesn't exist)
     File file = LittleFS.open(path, "w");
     if (!file) {
-        Serial.println("Failed to open file for writing");
+        os_printf("Failed to open file for writing");
         fileOperationInProgress = false;
         return false;
     }
 
     // Validate buffer size
     if (bufferSize == 0) {
-        Serial.println("Buffer size is zero");
+        os_printf("Buffer size is zero");
         file.close();
         fileOperationInProgress = false;
         return false;
@@ -200,13 +212,13 @@ bool writeFileFromBuffer(const char* path, const char* buffer, size_t bufferSize
     // Write buffer contents to the file
     size_t written = file.write((const uint8_t*)buffer, bufferSize);
     if (written == bufferSize) {
-        Serial.println("File written successfully");
+        os_printf("File written successfully");
         fileOperationInProgress = false;
          // Close the file
         file.close();
         return true;
     } else {
-        Serial.printf("Write failed, wrote %u bytes out of %u\n", written, bufferSize);
+        os_printf("Write failed, wrote %u bytes out of %u\n", written, bufferSize);
         fileOperationInProgress = false;
          // Close the file
         file.close();
@@ -228,11 +240,11 @@ bool writeFileFromBuffer(const char* path, const char* buffer, size_t bufferSize
 
 
 void handlecommandsfromwebsocketclients(uint8_t *datasentbywebsocketclient, size_t len) {
-  Serial.println("Handling command data");
+  os_printf("Handling command data");
 
   // Only process data further if it is 24 bytes
   if (len != 24) {
-    Serial.println("Invalid data length");
+    os_printf("Invalid data length");
     return;
   }
 
@@ -251,57 +263,65 @@ void handlecommandsfromwebsocketclients(uint8_t *datasentbywebsocketclient, size
   memcpy(writebuffer, datasentbywebsocketclient + sizeof(nodeMacaddr), sizeof(writebuffer));
 
   char readbuffer[18] = {0}; // Initialize with zeros
-  char sendbuffer[24]={0};
-  memcpy(sendbuffer,nodeMacaddr,sizeof(nodeMacaddr));
+  char sendbuffer[24] = {0};
+  memcpy(sendbuffer, nodeMacaddr, sizeof(nodeMacaddr));
   char filename[7] = {0};
   memcpy(filename, nodeMacaddr, sizeof(nodeMacaddr));
-  
-  
 
   // Determine command type and file name
   if (datasentbywebsocketclient[12] == 'Z') {
+    webSocket.binaryAll(datasentbywebsocketclient, len);
     filename[6] = 'Z';
-  if (safetoaccessFS){
-    if(writeFileFromBuffer(filename, writebuffer, sizeof(writebuffer)))
-    {Serial.println("File write success for 'Z' command");}}
-    webSocket.binaryAll(datasentbywebsocketclient, len);
+    if (safetoaccessFS) {
+      if (writeFileFromBuffer(filename, writebuffer, sizeof(writebuffer))) {
+        os_printf("File write success for 'Z' command");
+        
+      }
+    }
   } else if (datasentbywebsocketclient[12] == 'C') {
-    filename[6] = 'C';
-if (safetoaccessFS){
-    if (writeFileFromBuffer(filename, writebuffer, sizeof(writebuffer)))}
-    {Serial.println("File write success for 'C' command");}
     webSocket.binaryAll(datasentbywebsocketclient, len);
+    filename[6] = 'C';
+    if (safetoaccessFS) {
+      if (writeFileFromBuffer(filename, writebuffer, sizeof(writebuffer))) {
+        os_printf("File write success for 'C' command");
+        
+      }
+    }
   } else if (datasentbywebsocketclient[12] == 'z') {
     filename[6] = 'Z';
-if (safetoaccessFS){
-    if (readFileToCharArray(filename, readbuffer, 0, sizeof(readbuffer))) {
-     memcpy(sendbuffer+sizeof(nodeMacaddr),readbuffer, sizeof(readbuffer));
-      webSocket.binaryAll(sendbuffer, sizeof(sendbuffer));
-    // Print sent data
-  for (size_t i = 0; i < sizeof(sendbuffer); i++) {
-    Serial.printf("%02x ", sendbuffer[i]);
-  }
-  Serial.println();
-    } else {
-      Serial.println("File read failed for 'z' command");
-    }}
+    if (safetoaccessFS) {
+      if (readFileToCharArray(filename, readbuffer, 0, sizeof(readbuffer))) {
+        memcpy(sendbuffer + sizeof(nodeMacaddr), readbuffer, sizeof(readbuffer));
+        webSocket.binaryAll(sendbuffer, sizeof(sendbuffer));
+
+        // Print sent data
+        for (size_t i = 0; i < sizeof(sendbuffer); i++) {
+          Serial.printf("%02x ", sendbuffer[i]);
+        }
+        Serial.println();
+      } else {
+        os_printf("File read failed for 'z' command");
+      }
+    }
   } else if (datasentbywebsocketclient[12] == 'c') {
     filename[6] = 'C';
-if (safetoaccessFS){
-    if (readFileToCharArray(filename, readbuffer, 0, sizeof(readbuffer))) {
-      memcpy(sendbuffer+sizeof(nodeMacaddr),readbuffer, sizeof(readbuffer));
-      webSocket.binaryAll(sendbuffer, sizeof(sendbuffer));
+    if (safetoaccessFS) {
+      if (readFileToCharArray(filename, readbuffer, 0, sizeof(readbuffer))) {
+        memcpy(sendbuffer + sizeof(nodeMacaddr), readbuffer, sizeof(readbuffer));
+        webSocket.binaryAll(sendbuffer, sizeof(sendbuffer));
 
-          // Print send data
-  for (size_t i = 0; i < sizeof(sendbuffer); i++) {
-    Serial.printf("%02x ", sendbuffer[i]);
-  }
-    } else {
-      Serial.println("File read failed for 'c' command");
-    }
+        // Print send data
+        for (size_t i = 0; i < sizeof(sendbuffer); i++) {
+          Serial.printf("%02x ", sendbuffer[i]);
+          
+        }
+        Serial.println();
+      } else {
+        os_printf("File read failed for 'c' command");
+      }
     }
   } else {
-    Serial.println("Unknown command type");
+    os_printf("Unknown command type");
   }
 
   // Optionally clear buffers (not necessary for fixed-size arrays)
@@ -310,6 +330,7 @@ if (safetoaccessFS){
   memset(writebuffer, 0, sizeof(writebuffer));
   memset(readbuffer, 0, sizeof(readbuffer));
 }
+
 
 
 
@@ -571,16 +592,6 @@ server.onNotFound([](AsyncWebServerRequest *request){
   if (LittleFS.begin()){Serial.println("file system mounted");};
 
 
-  bool safetoaccessFS() {
-    unsigned long start = millis();
-    while (fileOperationInProgress) {
-        delay(10); // Wait for 10 milliseconds before checking again
-        if (millis() - start > 1000) { // Timeout after 1 second
-            return false;
-        }
-    }
-    return true;
-}
   
   
   /* ************OTA-Update********************* */
