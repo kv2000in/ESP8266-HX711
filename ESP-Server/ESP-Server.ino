@@ -56,6 +56,8 @@ int mytarereading=0;
 bool dataavailable = false;
 
 void onDataReceiver(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
+  memset(mydata,0,sizeof(mydata));
+  memset(macaddr,0,sizeof(macaddr));
   memcpy(mydata,incomingData,8);
   memcpy(macaddr,mac,6);
 dataavailable = true;
@@ -160,7 +162,7 @@ void handlecommandsfromwebsocketclients(uint8_t *datasentbywebsocketclient, size
   
   Serial.println("Handling command data");
  //Only process data further if it is 24 bytes 
- if(len >= 24) { 
+ if(len == 24) { 
       for (size_t i = 0; i < len; i++) {
         Serial.printf("%02x ", datasentbywebsocketclient[i]);
     }
@@ -168,7 +170,8 @@ void handlecommandsfromwebsocketclients(uint8_t *datasentbywebsocketclient, size
   
    //Copy the first 6 bytes as macaddr 
 char nodeMacaddr[6]; 
-memcpy(nodeMacaddr,datasentbywebsocketclient,6);
+memset(nodeMacaddr,0,sizeof(nodeMacaddr));
+memcpy(nodeMacaddr,datasentbywebsocketclient,sizeof(nodeMacaddr));
  
  
  /*1) Create/Overwrite file with filename being the MACAddress from the received message if it is calibrate. Append/Change the Zero data if it is Zero
@@ -176,79 +179,86 @@ memcpy(nodeMacaddr,datasentbywebsocketclient,6);
     One file for each node, named Cmacaddress- 18 bytes first 4 bytes [0-3] contain Calibration Data, next 2B[4-5] blank, next 1B[6] C, next 4 bytes [7-10] contain calibration timestamp, next 6 bytes [11-16]contain zeroes,  [17] - Null terminator
        
   */
-  
-if(datasentbywebsocketclient[12]=='Z'){
- char zerofiledata[18];
- 
- memcpy(zerofiledata,datasentbywebsocketclient+6,17);
-zerofiledata[17]= '\0';
- 
- char filename[8];
- filename[6]='Z';
- filename[7]= '\0'; //char array is null-terminated to ensure it can be used as a C-style string.
- memcpy(filename,nodeMacaddr,6);
- 
-writeFileFromBuffer(filename,zerofiledata,18);
-//2) Broadcast the message to all connected webclients
-  webSocket.binaryAll(datasentbywebsocketclient, len);
- 
-  } else if (datasentbywebsocketclient[12]=='C'){
-  
-  char calibfiledata[18];
-  
- memcpy(calibfiledata,datasentbywebsocketclient+6,18);
- calibfiledata[17] = '\0';
- char filename[8];
- filename[6]='C';
- filename[7]= '\0';
- memcpy(filename,nodeMacaddr,6);
- 
-writeFileFromBuffer(filename,calibfiledata,18);
-//2) Broadcast the message to all connected webclients
-  webSocket.binaryAll(datasentbywebsocketclient, len);
-  }
-  else if (datasentbywebsocketclient[12]=='z'){
-  //
-  char sendsaveddata[24];
-  //24 bytes as 6 mac, 4 Zero or Calib, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name 
- char filename[8];
- filename[6]='Z';
- filename[7]= '\0';
- memcpy(filename,nodeMacaddr,6);
- //read the contents of the file in sendsaveddata buffer
-if (readFileToCharArray(filename,sendsaveddata,6,18)){
+
+char writebuffer[18];
+memset(writebuffer, 0, sizeof(writebuffer));
+memcpy(writebuffer,datasentbywebsocketclient+sizeof(nodeMacaddr),len-sizeof(nodeMacaddr));
+writebuffer[17]= '\0';
+
+char readbuffer[24];
+memset(readbuffer,0,sizeof(readbuffer));
+readbuffer[23]='\0';
 //add the mac address
-memcpy(sendsaveddata,nodeMacaddr,6);
+memcpy(readbuffer,nodeMacaddr,sizeof(nodeMacaddr));
+  
+char filename[8];
+memset(filename,0,sizeof(filename));
+memcpy(filename,nodeMacaddr,sizeof(nodeMacaddr));
+
+if(datasentbywebsocketclient[12]=='Z'){
+
+filename[6]='Z';
+filename[7]= '\0'; //char array is null-terminated to ensure it can be used as a C-style string.
+
+ 
+writeFileFromBuffer(filename,writebuffer,sizeof(writebuffer));
+//2) Broadcast the message to all connected webclients
+ webSocket.binaryAll(datasentbywebsocketclient, len);
+ 
+ 
+ 
+ } else if (datasentbywebsocketclient[12]=='C'){
+  
+filename[6]='C';
+filename[7]= '\0'; //char array is null-terminated to ensure it can be used as a C-style string.
+writeFileFromBuffer(filename,writebuffer,sizeof(writebuffer));
+//2) Broadcast the message to all connected webclients
+webSocket.binaryAll(datasentbywebsocketclient, len);
+}
+else if (datasentbywebsocketclient[12]=='z'){
+//24 bytes as 6 mac, 4 Zero or Calib, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name 
+ filename[6]='Z';
+ filename[7]= '\0';
+ //read the contents of the file in sendsaveddata buffer
+if (readFileToCharArray(filename,readbuffer,sizeof(nodeMacaddr),sizeof(readbuffer)-sizeof(nodeMacaddr))){
+
 //send the data to clients
 //2) Broadcast the message to all connected webclients
-  webSocket.binaryAll(sendsaveddata, 24);
+  webSocket.binaryAll(readbuffer, sizeof(readbuffer));
 }
 else {
   //File read failed. either it doesn't exist or can't be read
   }
   }
  else if (datasentbywebsocketclient[12]=='c'){
-  //
-  char sendsaveddata[24];
   //24 bytes as 6 mac, 4 Zero or Calib, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name 
  char filename[8];
  filename[6]='C';
  filename[7]= '\0';
- memcpy(filename,nodeMacaddr,6);
+
  //read the contents of the file in sendsaveddata buffer
-if (readFileToCharArray(filename,sendsaveddata,6,18)){
-//add the mac address
-memcpy(sendsaveddata,nodeMacaddr,6);
+if (readFileToCharArray(filename,readbuffer,sizeof(nodeMacaddr),sizeof(readbuffer)-sizeof(nodeMacaddr))){
+
 //send the data to clients
 //2) Broadcast the message to all connected webclients
-  webSocket.binaryAll(sendsaveddata, 24);
+  webSocket.binaryAll(readbuffer, sizeof(readbuffer));
 }
-else {
+
+else 
+
+{
   //File read failed. either it doesn't exist or can't be read
   }
 
   }
- 
+// free(nodeMacaddr);
+//free(filename);
+//free(writebuffer);
+//free(readbuffer);
+ memset(nodeMacaddr,0,sizeof(nodeMacaddr));
+memset(filename,0,sizeof(nodeMacaddr));
+memset(writebuffer,0,sizeof(writebuffer));
+memset(readbuffer,0,sizeof(readbuffer));
  }
 
 }
@@ -380,14 +390,17 @@ void handledatafromnodes(char *sendermacaddress,char *datatobeprocessed){
   //Data arrives as 4bytes of float -scale reading and 2 bytes of integer - batteryvoltage
 //Send data as is to websocket
 char tosend[16]; //6 for mac + 8 for data(really just 6 for data - 4 for float and 2 for int+2 extra) + 2 extra
+ memset(tosend,0,sizeof(tosend));
 memcpy(tosend,sendermacaddress,6);
 memcpy(tosend+6,datatobeprocessed,8);
 webSocket.binaryAll(tosend, 16);
-convertrawdata(datatobeprocessed);
+//convertrawdata(datatobeprocessed);
   //Once done processing - reset the array - can run into problems if data is arriving faster than it can be handled. Need to implement some sort of data queue
   //thought about implementing a ringbuffer with index system but - one thread - not asynchronous so shouldn't matter.
   memset(mydata, 0, sizeof(mydata));
   memset(macaddr, 0, sizeof(macaddr));
+  memset(tosend,0,sizeof(tosend));
+  
   //set datavailable to false;
   dataavailable = false;
 //Push the data via websocket
@@ -411,9 +424,7 @@ Serial.print(" BatteryVoltage= ");
 Serial.println(myintbytes);
  
   }
-void setscaletare(char *scalemacaddr, char *currentscalerawreading){
-  
-  }
+
 
 
 
@@ -655,4 +666,13 @@ void loop()
   ArduinoOTA.handle();
 if (dataavailable){handledatafromnodes(macaddr,mydata);}
 webSocket.cleanupClients();
+ static unsigned long lastPrint = 0;
+  if (millis() - lastPrint > 10000) {
+    Serial.printf("Free heap: %u\n", ESP.getFreeHeap());
+    Serial.printf("Heap fragmentation: %u\n", ESP.getHeapFragmentation());
+    Serial.printf("Max free block size: %u\n", ESP.getMaxFreeBlockSize());
+    Serial.printf("Free stack: %u\n", ESP.getFreeContStack());
+    lastPrint = millis();
+  }
+
 }

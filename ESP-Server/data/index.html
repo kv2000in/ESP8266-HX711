@@ -220,14 +220,14 @@ console.log("Epoch Time (seconds):", epochTime);
                 
                 //(1) Check if the optional byte is set to Z or C
                 var myoptionalbyte = new DataView(serverbinarydata.slice(12,13)).getUint8();
-               switch(myoptionalbyte){
+               switch(String.fromCharCode(myoptionalbyte)){
                       case 'Z':
                        //So this data frame contains Zero data
                        handleZerodata(mysendermacaddressclean,myscalefloatvalue,serverbinarydata.slice(13,17),serverbinarydata.slice(17,24),);
                        return;
                         case 'C':
                         //So this data frame contains Calibration data
-                       handleZerodata(mysendermacaddressclean,myscalefloatvalue,serverbinarydata.slice(13,17));
+                       handleCalibrationdata(mysendermacaddressclean,myscalefloatvalue,serverbinarydata.slice(13,17));
                        return;
                       default:
                       //if zero and calib values for this node are not yet received - request it from the server
@@ -269,12 +269,12 @@ console.log("Epoch Time (seconds):", epochTime);
           
                 function handleZerodata(macaddr,zerorawreading,zerobinarytimestamp,commonName){
                     
-                    zerorawvaluedict[macaddr=[zerorawreading,convertEpochSecondsToLocalTime(convert4ByteBinaryToEpochSeconds(zerobinarytimestamp))]];
+                    zerorawvaluedict[macaddr]=[zerorawreading,convertEpochSecondsToLocalTime(convert4ByteBinaryToEpochSeconds(zerobinarytimestamp))];
                     //todo : handle name
                     console.log(commonName);
                 }
                 function handleCalibrationdata(macaddr,calibrationfactor,calibrationbinarytimestamp){
-                    calibrationfactordict[macaddr=[calibrationfactor,convertEpochSecondsToLocalTime(convert4ByteBinaryToEpochSeconds(calibrationbinarytimestamp))]];
+                    calibrationfactordict[macaddr]=[calibrationfactor,convertEpochSecondsToLocalTime(convert4ByteBinaryToEpochSeconds(calibrationbinarytimestamp))];
                 }
                 
                 function handlecleanedupdata(macaddr,rawreading,battery,mytime){
@@ -405,7 +405,15 @@ const arrayBuffer = fractionToArrayBuffer(numerator, denominator);
 const byteArray = new Uint8Array(arrayBuffer);
 console.log(byteArray); // Uint8Array [ ... ] where each element is a byte
   */
-       
+                
+function floatToArrayBuffer(float) {
+    const buffer = new ArrayBuffer(4);
+    const view = new DataView(buffer);
+    
+    view.setFloat32(0, float, true); // true for little-endian, false for big-endian
+    
+    return buffer;
+}
                 
 
 // Function to convert a signed integer to a 4-byte ArrayBuffer
@@ -590,7 +598,7 @@ function tarescale(macaddr)
                 
                 const macaddrbuff = macAddressToArrayBuffer(macaddr); // unable to use hex filenames on MCU hence ASCII encoding last 3 bytes of MAC
                 //const macaddrbuff = macLast3BytesToAsciiArrayBuffer(macaddr);
-                const ZeroValuebuff = signedIntToArrayBuffer(mycurrentrawvalues[macaddr][0],4);
+                const ZeroValuebuff = floatToArrayBuffer(mycurrentrawvalues[macaddr][0],4);
                 const emptybuff = new ArrayBuffer(2);
                 new Uint8Array(emptybuff).set([0, 0]);
                 const singlecharbuff = charToArrayBuffer('Z');
@@ -602,9 +610,7 @@ function tarescale(macaddr)
                 zerorawvaluedict[macaddr]=[mycurrentrawvalues[macaddr][0],getCurrentLocalTime()];
 			}
                                  
-              function askForNumber() {
-         
-        }                     
+                    
             function calibratescale(macaddr)
 			{
 				/*
@@ -619,7 +625,7 @@ function tarescale(macaddr)
                 If byte 13 is set to Z - time stamp will be followed by name 6 bytes*/
                 const macaddrbuff = macAddressToArrayBuffer(macaddr); 
                 //const macaddrbuff = macLast3BytesToAsciiArrayBuffer(macaddr); //6  
-                const CalibFracbuff = fractionToArrayBuffer(calibweight,document.getElementById("reading"+macaddr).innerHTML);   //4               
+                const CalibFracbuff = floatToArrayBuffer(calibweight/document.getElementById("reading"+macaddr).innerHTML);   //4               
                 const emptybuff = new ArrayBuffer(2);//2
                 new Uint8Array(emptybuff).set([0, 0]);
                 const singlecharbuff = charToArrayBuffer('C');//1
