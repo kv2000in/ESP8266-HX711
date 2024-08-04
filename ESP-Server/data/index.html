@@ -186,7 +186,7 @@ console.log("Epoch Time (seconds):", epochTime);
                         case 'C':
                             //calibrationfactordict[myservertextdatasliced[1].split("|")[0]]=[myservertextdatasliced[1].split("|")[1],myservertextdatasliced[1].split("|")[2]];
                         default:
-                            console.log(myservertextdatasliced[0]);
+                            //console.log(myservertextdatasliced[0]);
                     }
                 }
                 
@@ -207,7 +207,7 @@ console.log("Epoch Time (seconds):", epochTime);
                 or 24 bytes as 6 mac, 4 Zero or Calib data, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name, 1 Null marker
                 If optional byte number 13 , index byte [12] is set to Z or C - this will have a timestamp  to follow
                 If it is Z, time stamp will be followed by name */
-                console.log(serverbinarydata);
+                //console.log(serverbinarydata);
                 var mybinarydataarray= new Uint8Array(serverbinarydata);
                 var mysendermacaddress = mybinarydataarray.slice(0,6);
                 var mysendermacaddressclean = buf2hex(mysendermacaddress);
@@ -269,14 +269,30 @@ console.log("Epoch Time (seconds):", epochTime);
           
                 function handleZerodata(macaddr,zerorawreading,zerobinarytimestamp,commonName){
                     
+                    console.log(zerobinarytimestamp);
                     zerorawvaluedict[macaddr]=[zerorawreading,convertEpochSecondsToLocalTime(convert4ByteBinaryToEpochSeconds(zerobinarytimestamp))];
-                    //todo : handle name
-                    console.log(commonName);
+                    
+                    //handle name
+                    let decoder = new TextDecoder('utf-8');
+                    document.getElementById("nameinput"+macaddr).value = decoder.decode(commonName);
+                    updateReading(macaddr);
+                
                 }
                 function handleCalibrationdata(macaddr,calibrationfactor,calibrationbinarytimestamp){
                     calibrationfactordict[macaddr]=[calibrationfactor,convertEpochSecondsToLocalTime(convert4ByteBinaryToEpochSeconds(calibrationbinarytimestamp))];
+                    updateReading(macaddr);
                 }
                 
+                        // Function to update the HTML element
+        function updateReading(macaddr) {
+            let rawreading = mycurrentrawvalues[macaddr][0];
+            let zeroRawValue = zerorawvaluedict[macaddr][0];
+            let calibrationFactor = calibrationfactordict[macaddr][0];
+
+            let calculatedValue = Math.round(((rawreading - zeroRawValue) / 100) * calibrationFactor);
+
+            document.getElementById("reading" + macaddr).innerHTML = calculatedValue;
+        }
                 function handlecleanedupdata(macaddr,rawreading,battery,mytime){
                   /*create or update an entry in to the rawvalues dict and add the current values*/
                       mycurrentrawvalues[macaddr]=[rawreading,battery,mytime];
@@ -293,11 +309,14 @@ console.log("Epoch Time (seconds):", epochTime);
                               
                         /* Table must already have been expanded so just fill up the data
                               Fill up the columns with data*/
+                        
+
                       document.getElementById("addr"+macaddr).innerHTML=macaddr;
                       /*User assignment of names - may be store it on the server*/
-                      document.getElementById("rawreading"+macaddr).innerHTML=rawreading;
-                    document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvaluedict[macaddr][0])/100)*eval(calibrationfactordict[macaddr][0])); /*eval is dangerous*/
-                      document.getElementById("battery"+macaddr).innerHTML=battery;
+                      updateReading(macaddr);
+                    //document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvaluedict[macaddr][0])/100)*eval(calibrationfactordict[macaddr][0])); /*eval is dangerous*/
+                    //document.getElementById("reading" + macaddr).innerHTML = calculatedValue;  
+                    document.getElementById("battery"+macaddr).innerHTML=battery;
                       document.getElementById("time"+macaddr).innerHTML=mytime;
                               
                               
@@ -608,7 +627,8 @@ function tarescale(macaddr)
                 websock.send(memcopyArrayBuffers([macaddrbuff,ZeroValuebuff,emptybuff,singlecharbuff,timestampbuff,namebuff],24));
                 //Reset the zero value for this client. This client may or may not receive the broadcast sent by the server
                 zerorawvaluedict[macaddr]=[mycurrentrawvalues[macaddr][0],getCurrentLocalTime()];
-			}
+			     updateReading(macaddr);
+            }
                                  
                     
             function calibratescale(macaddr)
@@ -634,10 +654,10 @@ function tarescale(macaddr)
                 websock.send(memcopyArrayBuffers([macaddrbuff,CalibFracbuff,emptybuff,singlecharbuff,timestampbuff],24));
                 //Reset the CalibFrac value for this client. This client may or may not receive the broadcast sent by the server
                 calibrationfactordict[macaddr]=[calibweight/document.getElementById("reading"+macaddr).innerHTML,getCurrentLocalTime()];
-                
+                updateReading(macaddr);
                                  
                 if (!isNaN(calibweight)) {
-                    alert("You entered the number: " + calibweight);
+                    //alert("You entered the number: " + calibweight);
                 } else {
                     alert("That's not a valid number!");
                 }

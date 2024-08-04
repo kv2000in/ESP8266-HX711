@@ -102,7 +102,14 @@ AsyncWebSocket webSocket("/ws");
 unsigned long currESPSecs, currTime,timestamp, zeroTime;
 
 bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t bufferSize) {
-    Serial.printf("Reading file");
+    Serial.println("Reading file");
+
+
+    // Check if the file exists
+    if (!LittleFS.exists(path)) {
+        Serial.println("File not found");
+        return false;
+    }
 
     // Open the file for reading
     File file = LittleFS.open(path, "r");
@@ -111,16 +118,41 @@ bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t b
         return false;
     }
 
-    // Read the file contents into the buffer
-    size_t index = offset;
-    while (file.available() && index < bufferSize) { 
-        buffer[index++] = file.read();
+    // Check file size
+    size_t fileSize = file.size();
+    if (offset >= fileSize) {
+        Serial.println("Offset exceeds file size");
+        file.close();
+        return false;
     }
 
-  
+    // Calculate the number of bytes to read
+    size_t bytesToRead = fileSize - offset;
+    if (bytesToRead > bufferSize) {
+        Serial.println("Buffer is too small for the remaining file data");
+        bytesToRead = bufferSize;
+    }
+
+    // Seek to the offset position
+    file.seek(offset);
+
+    // Read the file contents into the buffer
+    size_t bytesRead = 0;
+    while (bytesRead < bytesToRead && file.available()) {
+        buffer[bytesRead++] = file.read();
+    }
+
+    // Null-terminate the buffer
+    if (bytesRead < bufferSize) {
+        buffer[bytesRead] = '\0';
+    } else if (bytesRead > bufferSize){
+        Serial.println("Buffer is not large enough for file data");
+    } else {
+        Serial.println("Buffer just right for file data");
+    }
 
     Serial.println("File read into buffer:");
-    
+
 
     // Close the file
     file.close();
@@ -128,171 +160,134 @@ bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t b
 }
 
 
-void writeFileFromBuffer(const char* path, const char* buffer, size_t bufferSize) {
-    Serial.printf("Writing file");
+bool writeFileFromBuffer(const char* path, const char* buffer, size_t bufferSize) {
+    Serial.println("Writing file");
+
+    // Check if LittleFS is mounted
+    if (!LittleFS.begin()) {
+        Serial.println("LittleFS not mounted");
+        return false;
+    }
+
+
 
     // Open the file for writing (creating it if it doesn't exist)
     File file = LittleFS.open(path, "w");
     if (!file) {
         Serial.println("Failed to open file for writing");
-        return;
+        return false;
+    }
+
+    // Validate buffer size
+    if (bufferSize == 0) {
+        Serial.println("Buffer size is zero");
+        file.close();
+        return false;
     }
 
     // Write buffer contents to the file
     size_t written = file.write((const uint8_t*)buffer, bufferSize);
     if (written == bufferSize) {
         Serial.println("File written successfully");
+        return true;
     } else {
-        Serial.printf("Write failed, wrote %u bytes\n", written);
+        Serial.printf("Write failed, wrote %u bytes out of %u\n", written, bufferSize);
+        return false;
     }
 
     // Close the file
     file.close();
-}
 
-
-
-
-
-
-void handlecommandsfromwebsocketclients(uint8_t *datasentbywebsocketclient, size_t len){
-  /*Commands will include the MAC Address - Zeroraw value or calibrationfactor- binaryepochsecondstimestamp and common name (with zero, not with calib) 
-  24 bytes as 6 mac, 4 Zerorawvalue or Calibfactor, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name, 1 reserved
-                If byte 13 is set to Z - time stamp will be followed by name 6 bytes */
-  
-  Serial.println("Handling command data");
- //Only process data further if it is 24 bytes 
- if(len == 24) { 
-      for (size_t i = 0; i < len; i++) {
-        Serial.printf("%02x ", datasentbywebsocketclient[i]);
-    }
-    Serial.println();
-  
-   //Copy the first 6 bytes as macaddr 
-char nodeMacaddr[6]; 
-memset(nodeMacaddr,0,sizeof(nodeMacaddr));
-memcpy(nodeMacaddr,datasentbywebsocketclient,sizeof(nodeMacaddr));
- 
- 
- /*1) Create/Overwrite file with filename being the MACAddress from the received message if it is calibrate. Append/Change the Zero data if it is Zero
-    One file for each node, named Zmacaddress -18 bytes, first 4 bytes [0-3] contain Zero raw value, next 2B[4-5] blank, next 1B[6] Z, next 4 bytes [7-10] contain binary zero timestamp, next 6 bytes [11-16]contain name, [17] - Null terminator
-    One file for each node, named Cmacaddress- 18 bytes first 4 bytes [0-3] contain Calibration Data, next 2B[4-5] blank, next 1B[6] C, next 4 bytes [7-10] contain calibration timestamp, next 6 bytes [11-16]contain zeroes,  [17] - Null terminator
-       
-  */
-
-char writebuffer[18];
-memset(writebuffer, 0, sizeof(writebuffer));
-memcpy(writebuffer,datasentbywebsocketclient+sizeof(nodeMacaddr),len-sizeof(nodeMacaddr));
-writebuffer[17]= '\0';
-
-char readbuffer[24];
-memset(readbuffer,0,sizeof(readbuffer));
-readbuffer[23]='\0';
-//add the mac address
-memcpy(readbuffer,nodeMacaddr,sizeof(nodeMacaddr));
-  
-char filename[8];
-memset(filename,0,sizeof(filename));
-memcpy(filename,nodeMacaddr,sizeof(nodeMacaddr));
-
-if(datasentbywebsocketclient[12]=='Z'){
-
-filename[6]='Z';
-filename[7]= '\0'; //char array is null-terminated to ensure it can be used as a C-style string.
-
- 
-writeFileFromBuffer(filename,writebuffer,sizeof(writebuffer));
-//2) Broadcast the message to all connected webclients
- webSocket.binaryAll(datasentbywebsocketclient, len);
- 
- 
- 
- } else if (datasentbywebsocketclient[12]=='C'){
-  
-filename[6]='C';
-filename[7]= '\0'; //char array is null-terminated to ensure it can be used as a C-style string.
-writeFileFromBuffer(filename,writebuffer,sizeof(writebuffer));
-//2) Broadcast the message to all connected webclients
-webSocket.binaryAll(datasentbywebsocketclient, len);
-}
-else if (datasentbywebsocketclient[12]=='z'){
-//24 bytes as 6 mac, 4 Zero or Calib, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name 
- filename[6]='Z';
- filename[7]= '\0';
- //read the contents of the file in sendsaveddata buffer
-if (readFileToCharArray(filename,readbuffer,sizeof(nodeMacaddr),sizeof(readbuffer)-sizeof(nodeMacaddr))){
-
-//send the data to clients
-//2) Broadcast the message to all connected webclients
-  webSocket.binaryAll(readbuffer, sizeof(readbuffer));
-}
-else {
-  //File read failed. either it doesn't exist or can't be read
-  }
-  }
- else if (datasentbywebsocketclient[12]=='c'){
-  //24 bytes as 6 mac, 4 Zero or Calib, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name 
- char filename[8];
- filename[6]='C';
- filename[7]= '\0';
-
- //read the contents of the file in sendsaveddata buffer
-if (readFileToCharArray(filename,readbuffer,sizeof(nodeMacaddr),sizeof(readbuffer)-sizeof(nodeMacaddr))){
-
-//send the data to clients
-//2) Broadcast the message to all connected webclients
-  webSocket.binaryAll(readbuffer, sizeof(readbuffer));
-}
-
-else 
-
-{
-  //File read failed. either it doesn't exist or can't be read
-  }
-
-  }
-// free(nodeMacaddr);
-//free(filename);
-//free(writebuffer);
-//free(readbuffer);
- memset(nodeMacaddr,0,sizeof(nodeMacaddr));
-memset(filename,0,sizeof(nodeMacaddr));
-memset(writebuffer,0,sizeof(writebuffer));
-memset(readbuffer,0,sizeof(readbuffer));
- }
-
-}
-
-//flag to use from web update to reboot the ESP
-bool shouldReboot = false;
-
-void onBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
-  //Handle body
-}
-File p;
-void onUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
-  //Handle upload
-   
-    if(!index){
-      Serial.printf("UploadStart: %s\n", filename.c_str());
-       p = LittleFS.open(filename, "w");
-    }
-      Serial.printf("UploadStart: (%u), (%u)\n", index, len);
-   p.seek(index, SeekSet);
-   Serial.printf("File position = %u",p.position());
-   for(size_t i=0; i<len; i++){
-   p.write(data[i]);
-   
     
-  }
-      
-    if(final)
-      {
-        Serial.printf("UploadEnd: %s (%u)\n", filename.c_str(), index+len);
-      request->send (200, "text/plain", String (index+len));
-      p.close();
-      }
+
 }
+
+
+
+
+
+
+
+
+void handlecommandsfromwebsocketclients(uint8_t *datasentbywebsocketclient, size_t len) {
+  Serial.println("Handling command data");
+
+  // Only process data further if it is 24 bytes
+  if (len != 24) {
+    Serial.println("Invalid data length");
+    return;
+  }
+
+  // Print received data
+  for (size_t i = 0; i < len; i++) {
+    Serial.printf("%02x ", datasentbywebsocketclient[i]);
+  }
+  Serial.println();
+
+  // Copy the first 6 bytes as MAC address
+  char nodeMacaddr[6];
+  memcpy(nodeMacaddr, datasentbywebsocketclient, sizeof(nodeMacaddr));
+
+  // Prepare buffers
+  char writebuffer[18];
+  memcpy(writebuffer, datasentbywebsocketclient + sizeof(nodeMacaddr), sizeof(writebuffer));
+
+  char readbuffer[18] = {0}; // Initialize with zeros
+  char sendbuffer[24]={0};
+  memcpy(sendbuffer,nodeMacaddr,sizeof(nodeMacaddr));
+  char filename[7] = {0};
+  memcpy(filename, nodeMacaddr, sizeof(nodeMacaddr));
+  
+  
+
+  // Determine command type and file name
+  if (datasentbywebsocketclient[12] == 'Z') {
+    filename[6] = 'Z';
+    if(writeFileFromBuffer(filename, writebuffer, sizeof(writebuffer)))
+    {Serial.println("File write success for 'Z' command");}
+    webSocket.binaryAll(datasentbywebsocketclient, len);
+  } else if (datasentbywebsocketclient[12] == 'C') {
+    filename[6] = 'C';
+    if (writeFileFromBuffer(filename, writebuffer, sizeof(writebuffer)))
+    {Serial.println("File write success for 'C' command");}
+    webSocket.binaryAll(datasentbywebsocketclient, len);
+  } else if (datasentbywebsocketclient[12] == 'z') {
+    filename[6] = 'Z';
+    if (readFileToCharArray(filename, readbuffer, 0, sizeof(readbuffer))) {
+     memcpy(sendbuffer+sizeof(nodeMacaddr),readbuffer, sizeof(readbuffer));
+      webSocket.binaryAll(sendbuffer, sizeof(sendbuffer));
+    // Print sent data
+  for (size_t i = 0; i < sizeof(sendbuffer); i++) {
+    Serial.printf("%02x ", sendbuffer[i]);
+  }
+  Serial.println();
+    } else {
+      Serial.println("File read failed for 'z' command");
+    }
+  } else if (datasentbywebsocketclient[12] == 'c') {
+    filename[6] = 'C';
+    if (readFileToCharArray(filename, readbuffer, 0, sizeof(readbuffer))) {
+      memcpy(sendbuffer+sizeof(nodeMacaddr),readbuffer, sizeof(readbuffer));
+      webSocket.binaryAll(sendbuffer, sizeof(sendbuffer));
+
+          // Print send data
+  for (size_t i = 0; i < sizeof(sendbuffer); i++) {
+    Serial.printf("%02x ", sendbuffer[i]);
+  }
+    } else {
+      Serial.println("File read failed for 'c' command");
+    }
+  } else {
+    Serial.println("Unknown command type");
+  }
+
+  // Optionally clear buffers (not necessary for fixed-size arrays)
+  memset(nodeMacaddr, 0, sizeof(nodeMacaddr));
+  memset(filename, 0, sizeof(filename));
+  memset(writebuffer, 0, sizeof(writebuffer));
+  memset(readbuffer, 0, sizeof(readbuffer));
+}
+
 
 
 
@@ -300,9 +295,9 @@ void onEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTyp
   if(type == WS_EVT_CONNECT){
     //client connected
     os_printf("ws[%s][%u] connect\n", server->url(), client->id());
-    client->printf("Z#a020a60a86ce|-811493|2022-4-12 21:33:49");
-    client->printf("C#a020a60a86ce|500/285|2022-4-12 21:33:49"); 
-    client->ping();
+    //client->printf("Z#a020a60a86ce|-811493|2022-4-12 21:33:49");
+    //client->printf("C#a020a60a86ce|500/285|2022-4-12 21:33:49"); 
+    //client->ping();
   } else if(type == WS_EVT_DISCONNECT){
     //client disconnected
     os_printf("ws[%s][%u] disconnect: %u\n", server->url(), client->id());
@@ -413,17 +408,7 @@ webSocket.binaryAll(tosend, 16);
   
   }
 
-void convertrawdata(char * rawdata){
-  //Thinking about saving everything binary - as it will save space. All binary to ascii conversions to be done by javascript on the browsers.
-  //So this function is here just for testing.
- memcpy(&myfloatbytes,rawdata,4);
- memcpy(&myintbytes,rawdata+4,2);
-Serial.print("Reading = ");
-Serial.print(myfloatbytes);
-Serial.print(" BatteryVoltage= ");
-Serial.println(myintbytes);
- 
-  }
+
 
 
 
@@ -469,11 +454,6 @@ Serial.printf("MAC address = %s\n", WiFi.softAPmacAddress().c_str());
 
       
 
-//    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-//        //request->send(200, "text/html", INDEX_HTML);
-//   request->send(200, "text/html", "HELLO WORLD");
-//    
-//    });
 
 
 
@@ -484,14 +464,8 @@ Serial.printf("MAC address = %s\n", WiFi.softAPmacAddress().c_str());
     request->send(200, "text/plain", String(ESP.getFreeHeap()));
   });
 
-  server.on("/upload", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.printf("%u \n",fractionoccupiedspaceonfilesystem());
-    request->send(200, "text/html", "<p>Available space="+String (fractionoccupiedspaceonfilesystem())+"</p><br><br><br><form method='POST' action='/upload' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>");
-  });
-  // upload a file to /upload
-  server.on("/upload", HTTP_POST, [](AsyncWebServerRequest *request){
-    
-  }, onUpload);
+
+
 
   // send a file when /index is requested
   server.on("/index", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -505,42 +479,6 @@ request->send(response);
   });
 
 
-  // Simple Firmware Update Form
-  server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send(200, "text/html", "<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='update'><input type='submit' value='Update'></form>");
-  });
-  server.on("/update", HTTP_POST, [](AsyncWebServerRequest *request){
-    shouldReboot = !Update.hasError();
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", shouldReboot?"OK":"FAIL");
-    response->addHeader("Connection", "close");
-    request->send(response);
-  },[](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
-    if(!index){
-      Serial.printf("Update Start: %s\n", filename.c_str());
-      Update.runAsync(true);
-      if(!Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000)){
-        Update.printError(Serial);
-      }
-    }
-    if(!Update.hasError()){
-      if(Update.write(data, len) != len){
-        Update.printError(Serial);
-      }
-    }
-    if(final){
-      if(Update.end(true)){
-        Serial.printf("Update Success: %uB\n", index+len);
-      } else {
-        Update.printError(Serial);
-      }
-    }
-  });
-
-  // attach filesystem root at URL /fs
-  //server.serveStatic("/fs", LittleFS, "/data/");
-  //server.serveStatic("/", LittleFS,"/data/index.html").setLastModified("Mon, 17 Apr 2022 14:00:00 GMT");
-
-//AsyncStaticWebHandler* handler = &server.serveStatic("/", LittleFS, "/index.html").setLastModified("Mon, 17 Apr 2022 14:00:00 GMT");
 server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
 server.serveStatic("/", LittleFS, "/").setLastModified("Mon, 17 Apr 2022 14:00:00 GMT");
 //server.serveStatic("/", LittleFS, "index.html").setLastModified("Mon, 17 Apr 2022 14:00:00 GMT");
@@ -594,13 +532,7 @@ server.onNotFound([](AsyncWebServerRequest *request){
 
 
   
-  server.onRequestBody([](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total){
-    if(!index)
-      Serial.printf("BodyStart: %u\n", total);
-    Serial.printf("%s", (const char*)data);
-    if(index + len == total)
-      Serial.printf("BodyEnd: %u\n", total);
-  });
+
 
  webSocket.onEvent(onEvent);
   server.addHandler(&webSocket);
@@ -656,23 +588,19 @@ ArduinoOTA.begin();
 
 
 void loop()
-{
-  if(shouldReboot){
-    Serial.println("Rebooting...");
-    delay(100);
-    ESP.restart();
-  }
- 
+
+ {
   ArduinoOTA.handle();
 if (dataavailable){handledatafromnodes(macaddr,mydata);}
 webSocket.cleanupClients();
- static unsigned long lastPrint = 0;
-  if (millis() - lastPrint > 10000) {
-    Serial.printf("Free heap: %u\n", ESP.getFreeHeap());
-    Serial.printf("Heap fragmentation: %u\n", ESP.getHeapFragmentation());
-    Serial.printf("Max free block size: %u\n", ESP.getMaxFreeBlockSize());
-    Serial.printf("Free stack: %u\n", ESP.getFreeContStack());
-    lastPrint = millis();
-  }
+// static unsigned long lastPrint = 0;
+//  if (millis() - lastPrint > 10000) {
+//    Serial.printf("Free heap: %u\n", ESP.getFreeHeap());
+//    Serial.printf("Heap fragmentation: %u\n", ESP.getHeapFragmentation());
+//    Serial.printf("Max free block size: %u\n", ESP.getMaxFreeBlockSize());
+//    Serial.printf("Free stack: %u\n", ESP.getFreeContStack());
+//    Serial.printf("FS occupied space: %u\n",fractionoccupiedspaceonfilesystem());
+//    lastPrint = millis();
+//  }
 
 }
