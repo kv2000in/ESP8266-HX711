@@ -261,25 +261,19 @@ void handlecommandsfromwebsocketclients(uint8_t *datasentbywebsocketclient, size
   // Determine command type and file name
   if (datasentbywebsocketclient[12] == 'Z') {
     filename[6] = 'Z';
-       while (fileOperationInProgress){
-      delay(20);
-      }
+  if (safetoaccessFS){
     if(writeFileFromBuffer(filename, writebuffer, sizeof(writebuffer)))
-    {Serial.println("File write success for 'Z' command");}
+    {Serial.println("File write success for 'Z' command");}}
     webSocket.binaryAll(datasentbywebsocketclient, len);
   } else if (datasentbywebsocketclient[12] == 'C') {
     filename[6] = 'C';
-   while (fileOperationInProgress){
-     delay(20);
-     }
-    if (writeFileFromBuffer(filename, writebuffer, sizeof(writebuffer)))
+if (safetoaccessFS){
+    if (writeFileFromBuffer(filename, writebuffer, sizeof(writebuffer)))}
     {Serial.println("File write success for 'C' command");}
     webSocket.binaryAll(datasentbywebsocketclient, len);
   } else if (datasentbywebsocketclient[12] == 'z') {
     filename[6] = 'Z';
-    while (fileOperationInProgress){
-      delay(20);
-      }
+if (safetoaccessFS){
     if (readFileToCharArray(filename, readbuffer, 0, sizeof(readbuffer))) {
      memcpy(sendbuffer+sizeof(nodeMacaddr),readbuffer, sizeof(readbuffer));
       webSocket.binaryAll(sendbuffer, sizeof(sendbuffer));
@@ -290,12 +284,10 @@ void handlecommandsfromwebsocketclients(uint8_t *datasentbywebsocketclient, size
   Serial.println();
     } else {
       Serial.println("File read failed for 'z' command");
-    }
+    }}
   } else if (datasentbywebsocketclient[12] == 'c') {
     filename[6] = 'C';
-     while (fileOperationInProgress){
-      delay(20);
-      }
+if (safetoaccessFS){
     if (readFileToCharArray(filename, readbuffer, 0, sizeof(readbuffer))) {
       memcpy(sendbuffer+sizeof(nodeMacaddr),readbuffer, sizeof(readbuffer));
       webSocket.binaryAll(sendbuffer, sizeof(sendbuffer));
@@ -306,6 +298,7 @@ void handlecommandsfromwebsocketclients(uint8_t *datasentbywebsocketclient, size
   }
     } else {
       Serial.println("File read failed for 'c' command");
+    }
     }
   } else {
     Serial.println("Unknown command type");
@@ -500,6 +493,7 @@ Serial.printf("MAC address = %s\n", WiFi.softAPmacAddress().c_str());
 
   // send a file when /index is requested
   server.on("/index", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (safetoaccessFS){ 
    AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/index.html");
 //response->addHeader("Last","ESP Async Web Server");
 //
@@ -507,7 +501,7 @@ response->addHeader("ETag","33a64df551425fcc55e4d42a148795d9f25f89d4");
 response->addHeader("Last-Modified","Mon, 17 Apr 2022 14:00:00 GMT");
 request->send(response); 
    //
-  });
+  }});
 
 
 server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
@@ -577,7 +571,16 @@ server.onNotFound([](AsyncWebServerRequest *request){
   if (LittleFS.begin()){Serial.println("file system mounted");};
 
 
-  
+  bool safetoaccessFS() {
+    unsigned long start = millis();
+    while (fileOperationInProgress) {
+        delay(10); // Wait for 10 milliseconds before checking again
+        if (millis() - start > 1000) { // Timeout after 1 second
+            return false;
+        }
+    }
+    return true;
+}
   
   
   /* ************OTA-Update********************* */
