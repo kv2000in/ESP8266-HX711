@@ -22,6 +22,9 @@
 			<script>
                 /*Will be obsolete once the code for requesting these values from the server are written */
                 var zerorawvaluedict={}; 
+                /*
+                zerorawvaluedict {a020a60a86ce: Array(2)} a020a60a86ce: Array(2) 0: "-811493" 1: "2022-4-12 21:33:49"
+                */
                 var calibrationfactordict={};
                 var mycurrentrawvalues={};
                 var mymsgtosend;
@@ -74,37 +77,182 @@
 				websock.send(message);
 			}
             
-                function handleservertextdata(servertextdata){
+
+                
+                
+            function getcurrentUTCepochseconds(){
+                
+                // Get the current date and time
+                const now = new Date();
+
+                // Get the UTC epoch time in milliseconds
+                const utcEpochTimeMillis = now.getTime();
+
+                // Convert milliseconds to seconds (Unix time is in seconds)
+                const utcEpochTimeSeconds = Math.floor(utcEpochTimeMillis / 1000);
+
+                //console.log(utcEpochTimeSeconds);
+                return utcEpochTimeSeconds;
+            }
+               
+            
+        function convertEpochSecondsToBinary(utcEpochTimeSeconds) {
+    // Convert the epoch time to a binary string
+    const binaryString = utcEpochTimeSeconds.toString(2);
+
+    // Calculate the number of bytes needed
+    // Each byte is 8 bits, so divide the length of the binary string by 8 and round up
+    const numBytes = Math.ceil(binaryString.length / 8);
+
+    return { binaryString, numBytes };
+}
+
+/*Example usage
+const utcEpochTimeSeconds = 1625247600; // Example epoch time
+const result = convertEpochSecondsToBinary(utcEpochTimeSeconds);
+
+console.log("Binary Representation:", result.binaryString);
+console.log("Number of Bytes:", result.numBytes);
+  */        
+            
+            function convert4ByteBinaryToEpochSeconds(binaryData) {
+    // Create a DataView from the binary data
+    const dataView = new DataView(binaryData);
+
+    // Get the 32-bit unsigned integer from the binary data (assuming big-endian)
+    const epochTime = dataView.getUint32(0, false); // false indicates big-endian, true indicates little-endian
+
+    return epochTime;
+}
+
+/* Example usage
+const binaryString = "\x61\x65\x31\x1E"; // Example 4-byte binary string
+const binaryBuffer = new ArrayBuffer(4);
+const uint8Array = new Uint8Array(binaryBuffer);
+
+// Fill the buffer with the binary string bytes
+for (let i = 0; i < binaryString.length; i++) {
+    uint8Array[i] = binaryString.charCodeAt(i);
+}
+
+const epochTime = convert4ByteBinaryToEpochSeconds(binaryBuffer);
+console.log("Epoch Time (seconds):", epochTime);
+  */          
+              
+                
+            // Function to convert UTC epoch time in seconds to local time string
+        function convertEpochSecondsToLocalTime(epochSeconds) {
+    // Create a new Date object from the epoch time in milliseconds
+    const date = new Date(epochSeconds * 1000);
+
+    // Get the components of the date
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    // Format the date as yyyy-mm-dd hh:mm:ss
+    const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+
+    return formattedDate;  
+                }
+                
+        function getCurrentLocalTime() {
+    const now = new Date();
+
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // Months are zero-indexed
+    const day = String(now.getDate()).padStart(2, '0');
+
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+                
+    function isArrayEmptyOrNull(arr) {
+    return arr == null || (Array.isArray(arr) && arr.length === 0);
+}            
+                
+                  function handleservertextdata(servertextdata){
                     /*Z#macaddr|zerorawvalue|timestamp */
                   var myservertextdatasliced = servertextdata.split("#");
                     switch(myservertextdatasliced[0]){
                         case 'Z':
-                            zerorawvaluedict[myservertextdatasliced[1].split("|")[0]]=[myservertextdatasliced[1].split("|")[1],myservertextdatasliced[1].split("|")[2]];
+                            //zerorawvaluedict[myservertextdatasliced[1].split("|")[0]]=[myservertextdatasliced[1].split("|")[1],myservertextdatasliced[1].split("|")[2]];
                         case 'C':
-                            calibrationfactordict[myservertextdatasliced[1].split("|")[0]]=[myservertextdatasliced[1].split("|")[1],myservertextdatasliced[1].split("|")[2]];
+                            //calibrationfactordict[myservertextdatasliced[1].split("|")[0]]=[myservertextdatasliced[1].split("|")[1],myservertextdatasliced[1].split("|")[2]];
                         default:
                             console.log(myservertextdatasliced[0]);
                     }
                 }
                 
+    function requeststoredval(macaddr,char){
+        const macaddrbuff = macAddressToArrayBuffer(macaddr); 
+                const emptybuff = new ArrayBuffer(6);
+                new Uint8Array(emptybuff).set([0,0,0,0,0,0]);
+                const singlecharbuff = charToArrayBuffer(char);
+                const timestampbuff = signedIntToArrayBuffer(getcurrentUTCepochseconds(),4);
+                //Send binary frame to server
+                websock.send(memcopyArrayBuffers([macaddrbuff,emptybuff,singlecharbuff,timestampbuff],24));
+        
+    }
+              
             function handleserverbinarydata(serverbinarydata){
-                /*16 bytes of data = 6 for mac + 8 for data(really just 6 for data - 4 for float and 2 for int+2 extra) + 2 extra */
+                /*16 bytes of data = 6 for mac +  6 for data - 4 for float (raw value) and 2 for int (batteryvoltage) + 4 blanks. 
+                
+                or 24 bytes as 6 mac, 4 Zero or Calib data, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name, 1 Null marker
+                If optional byte number 13 , index byte [12] is set to Z or C - this will have a timestamp  to follow
+                If it is Z, time stamp will be followed by name */
+                console.log(serverbinarydata);
                 var mybinarydataarray= new Uint8Array(serverbinarydata);
                 var mysendermacaddress = mybinarydataarray.slice(0,6);
+                var mysendermacaddressclean = buf2hex(mysendermacaddress);
                 var myscalefloatvaluebytes = serverbinarydata.slice(6,10); 
                 var mybatteryvoltagebytes = serverbinarydata.slice(10,12);
                 var myfloatview = new DataView(myscalefloatvaluebytes);
                 var myintview = new DataView(mybatteryvoltagebytes);
                 var myscalefloatvalue = myfloatview.getFloat32(0,true); /* Signed 32 bit float, little endian. https:/developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView/getFloat32*/
                 var mybatteryvoltage = myintview.getInt16(0,true);
-               /*Generate timestamp for this data*/
-                var today = new Date();
-                var date = today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
-                var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
-                var dateTime = date+' '+time;
+                
+                //(1) Check if the optional byte is set to Z or C
+                var myoptionalbyte = new DataView(serverbinarydata.slice(12,13)).getUint8();
+               switch(myoptionalbyte){
+                      case 'Z':
+                       //So this data frame contains Zero data
+                       handleZerodata(mysendermacaddressclean,myscalefloatvalue,serverbinarydata.slice(13,17),serverbinarydata.slice(17,24),);
+                       return;
+                        case 'C':
+                        //So this data frame contains Calibration data
+                       handleZerodata(mysendermacaddressclean,myscalefloatvalue,serverbinarydata.slice(13,17));
+                       return;
+                      default:
+                      //if zero and calib values for this node are not yet received - request it from the server
+                               
+                    if (isArrayEmptyOrNull(calibrationfactordict[mysendermacaddressclean]))  {
+                        //while waiting for this info to be available - server may or may not have it - set the current calib value to one
+                           calibrationfactordict[mysendermacaddressclean]=[1,getCurrentLocalTime()];
+
+          
+                        requeststoredval(mysendermacaddressclean,'c');
+                    } 
+                if (isArrayEmptyOrNull(zerorawvaluedict[mysendermacaddressclean])) {
+                        //while waiting for this info to be available - server may or may not have it - set the current raw value to zero
+                  zerorawvaluedict[mysendermacaddressclean]=[0,getCurrentLocalTime()];
+                requeststoredval(mysendermacaddressclean,'z');
+                      
+                       }
+               
+                
+                
+              
             /*call the data handler routine*/
-                handlecleanedupdata(buf2hex(mysendermacaddress),myscalefloatvalue,mybatteryvoltage,dateTime);
+                handlecleanedupdata(mysendermacaddressclean,myscalefloatvalue,mybatteryvoltage,getCurrentLocalTime());
             
+            }
             }
 			/* https:/stackoverflow.com/questions/40031688/javascript-arraybuffer-to-hex*/
                 
@@ -114,6 +262,21 @@
       .join('');
 }
       
+                
+          
+        
+                
+          
+                function handleZerodata(macaddr,zerorawreading,zerobinarytimestamp,commonName){
+                    
+                    zerorawvaluedict[macaddr=[zerorawreading,convertEpochSecondsToLocalTime(convert4ByteBinaryToEpochSeconds(zerobinarytimestamp))]];
+                    //todo : handle name
+                    console.log(commonName);
+                }
+                function handleCalibrationdata(macaddr,calibrationfactor,calibrationbinarytimestamp){
+                    calibrationfactordict[macaddr=[calibrationfactor,convertEpochSecondsToLocalTime(convert4ByteBinaryToEpochSeconds(calibrationbinarytimestamp))]];
+                }
+                
                 function handlecleanedupdata(macaddr,rawreading,battery,mytime){
                   /*create or update an entry in to the rawvalues dict and add the current values*/
                       mycurrentrawvalues[macaddr]=[rawreading,battery,mytime];
@@ -161,7 +324,7 @@
                         newele2.setAttribute("id","addr"+macaddr);
                         newele2.setAttribute("class","td-hidden");
                         const newele2a = document.createElement("td");
-                        newele2a.setAttribute("id","name"+macaddr);
+                        newele2a.setAttribute("id","nametd"+macaddr);
                         const newele3 = document.createElement("td");
                         newele3.setAttribute("id","rawreading"+macaddr);
                         newele3.setAttribute("class","td-hidden");
@@ -203,29 +366,282 @@
                       newele8.innerHTML="Calibrate";
                       document.getElementById("actions"+macaddr).appendChild(newele7);
                       document.getElementById("actions"+macaddr).appendChild(newele8);
+                      const newele2aa = document.createElement("input");
+                      newele2aa.setAttribute("id","nameinput"+macaddr);
+                      document.getElementById("nametd"+macaddr).appendChild(newele2aa);
+                      
                   }
                     
                     
                     
                 }
                 
+
+// Function to convert a fraction to a 4-byte ArrayBuffer
+function fractionToArrayBuffer(numerator, denominator) {
+    if (denominator === 0) {
+        throw new Error('Denominator cannot be zero.');
+    }
+
+    // Calculate the floating-point value of the fraction
+    const value = numerator / denominator;
+
+    // Create a Float32Array with one element
+    const float32Array = new Float32Array(1);
+    float32Array[0] = value;
+
+    // Return the underlying ArrayBuffer (4 bytes)
+    return float32Array.buffer;
+}
+
+
+/*                
+// Example usage
+const numerator = 3;
+const denominator = 4;
+const arrayBuffer = fractionToArrayBuffer(numerator, denominator);
+
+// Log the ArrayBuffer as a byte array for verification
+const byteArray = new Uint8Array(arrayBuffer);
+console.log(byteArray); // Uint8Array [ ... ] where each element is a byte
+  */
+       
                 
-			function tarescale(macaddr)
+
+// Function to convert a signed integer to a 4-byte ArrayBuffer
+function signedIntToArrayBuffer(number,len) {
+    // Create a 4-byte ArrayBuffer
+    const buffer = new ArrayBuffer(len);
+    
+    // Create a DataView to manipulate the buffer
+    const view = new DataView(buffer);
+    
+    // Set the signed 32-bit integer value
+    view.setInt32(0, number, true); // true for little-endian, false for big-endian
+    
+    return buffer;
+}
+/*
+// Example usage
+const signedNumber = -123456;
+const intArrayBuffer = signedIntToArrayBuffer(signedNumber);
+
+// Log the ArrayBuffer as a byte array for verification
+const intByteArray = new Uint8Array(intArrayBuffer);
+console.log(intByteArray); // Uint8Array [ ... ] where each element is a byte                
+*/
+                
+
+// Function to create a fixed-length byte array and copy ArrayBuffers into it
+function memcopyArrayBuffers(buffers, totalLength) {
+    // Create a fixed-length Uint8Array
+    const resultArray = new Uint8Array(totalLength);
+
+    // Keep track of the current offset
+    let offset = 0;
+
+    // Copy each ArrayBuffer into the result array
+    buffers.forEach(buffer => {
+        const uint8View = new Uint8Array(buffer);
+        resultArray.set(uint8View, offset);
+        offset += uint8View.length;
+    });
+
+    return resultArray;
+}
+
+/*
+// Example usage
+const buffer1 = new ArrayBuffer(4);
+const buffer2 = new ArrayBuffer(4);
+const buffer3 = new ArrayBuffer(4);
+
+// Fill buffers with some data for demonstration
+new Uint8Array(buffer1).set([1, 2, 3, 4]);
+new Uint8Array(buffer2).set([5, 6, 7, 8]);
+new Uint8Array(buffer3).set([9, 10, 11, 12]);
+
+const totalLength = buffer1.byteLength + buffer2.byteLength + buffer3.byteLength;
+const combinedArray = memcopyArrayBuffers([buffer1, buffer2, buffer3], totalLength);
+
+console.log(combinedArray); // Uint8Array [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 ]
+*/                
+
+                
+// Function to convert a MAC address string to a 6-byte ArrayBuffer
+// Function to convert a MAC address string to a 6-byte ArrayBuffer
+function macAddressToArrayBuffer(macAddress) {
+    if (macAddress.length !== 12) {
+        throw new Error('MAC address must be 12 hexadecimal digits.');
+    }
+
+    // Create a Uint8Array of length 6
+    const byteArray = new Uint8Array(6);
+
+    // Convert each pair of hex digits to a number and store it in the byte array
+    for (let i = 0; i < 6; i++) {
+        const hexPair = macAddress.substr(i * 2, 2);
+        byteArray[i] = parseInt(hexPair, 16);
+    }
+
+    // Return the underlying ArrayBuffer
+    return byteArray.buffer;
+}
+/*
+// Example usage
+const macAddress = "aabbccddeeff";
+const arrayBuffer = macAddressToArrayBuffer(macAddress);
+
+// Log the ArrayBuffer as a byte array for verification
+const byteArray = new Uint8Array(arrayBuffer);
+console.log(byteArray); // Uint8Array [ 170, 187, 204, 221, 238, 255 ]
+*/
+                
+// Function to convert a string to a 6-byte ArrayBuffer
+function stringTo6ByteArrayBuffer(str) {
+    // Ensure the string is exactly 6 characters long
+    let paddedStr = str.padEnd(6, '\0').substring(0, 6);
+    
+    // Create a Uint8Array of length 6
+    const byteArray = new Uint8Array(6);
+    
+    // Convert each character to its corresponding byte value
+    for (let i = 0; i < 6; i++) {
+        byteArray[i] = paddedStr.charCodeAt(i);
+    }
+    
+    // Return the underlying ArrayBuffer
+    return byteArray.buffer;
+}
+/*
+// Example usage
+const exampleString = "Hello, World!";
+const arrayBuffer = stringTo6ByteArrayBuffer(exampleString);
+
+// Log the ArrayBuffer as a byte array for verification
+const byteArray = new Uint8Array(arrayBuffer);
+console.log(byteArray); // Uint8Array representing the first 6 characters
+*/
+
+                
+// Function to convert character 'C' to a 1-byte ArrayBuffer
+function charToArrayBuffer(char) {
+    // Create a Uint8Array of length 1
+    const byteArray = new Uint8Array(1);
+
+    // Set the byte value to the character code of 'C'
+    byteArray[0] = char.charCodeAt(0);
+
+    // Return the underlying ArrayBuffer
+    return byteArray.buffer;
+}
+
+                /*
+// Example usage
+const char = 'C';
+const arrayBuffer = charToArrayBuffer(char);
+
+// Log the ArrayBuffer as a byte array for verification
+const byteArray = new Uint8Array(arrayBuffer);
+console.log(byteArray); // Uint8Array [ 67 ]
+*/                
+   
+function macLast3BytesToAsciiArrayBuffer(mac) {
+    if (mac.length !== 12) {
+        throw new Error('MAC address should be in aabbccddeeff format');
+    }
+    
+    // Extract last 3 bytes from MAC address
+    const last3Bytes = mac.slice(-6); // 'ddeeff'
+
+    // Convert last 3 bytes to ASCII representation
+    const asciiStr = last3Bytes.match(/.{2}/g).map(hex => String.fromCharCode(parseInt(hex, 16))).join('');
+
+    // Create a 6-byte ArrayBuffer and a DataView to manipulate it
+    const buffer = new ArrayBuffer(6);
+    const view = new DataView(buffer);
+
+    // Fill the ArrayBuffer with ASCII values
+    for (let i = 0; i < asciiStr.length; i++) {
+        view.setUint8(i, asciiStr.charCodeAt(i));
+    }
+
+    return buffer;
+}
+/*
+// Example usage:
+const mac = 'aabbccddeeff';
+const arrayBuffer = macLast3BytesToAsciiArrayBuffer(mac);
+console.log(new Uint8Array(arrayBuffer)); // Prints the 6-byte ASCII representation
+                
+  */              
+                
+function tarescale(macaddr)
 			{
 				/*alert(macaddr);
                 Store raw value from each macadrr in an associative array or dict = mycurrentrawvalues{} - stored as mycurrentrawvalues[macaddr]=[rawreading,battery,mytime];.
                 sendback the macaddr, rawvalue and timestamp*/
-                mymsgtosend="Z#"+macaddr+"|"+mycurrentrawvalues[macaddr][0]+"|"+mycurrentrawvalues[macaddr][2];
-                console.log(mymsgtosend);
+                //mymsgtosend="Z#"+macaddr+"|"+mycurrentrawvalues[macaddr][0]+"|"+mycurrentrawvalues[macaddr][2];
+                //console.log(mymsgtosend);
+                var nodename=document.getElementById("nameinput"+macaddr).value;
+                
+                /*24 bytes as 6 mac, 4 Zerorawvalue, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name, 1 reserved
+                If byte 13 is set to Z - time stamp will be followed by name 6 bytes*/
+                
+                const macaddrbuff = macAddressToArrayBuffer(macaddr); // unable to use hex filenames on MCU hence ASCII encoding last 3 bytes of MAC
+                //const macaddrbuff = macLast3BytesToAsciiArrayBuffer(macaddr);
+                const ZeroValuebuff = signedIntToArrayBuffer(mycurrentrawvalues[macaddr][0],4);
+                const emptybuff = new ArrayBuffer(2);
+                new Uint8Array(emptybuff).set([0, 0]);
+                const singlecharbuff = charToArrayBuffer('Z');
+                const timestampbuff = signedIntToArrayBuffer(getcurrentUTCepochseconds(),4);
+                const namebuff = stringTo6ByteArrayBuffer(nodename);
+                //Send binary frame to server
+                websock.send(memcopyArrayBuffers([macaddrbuff,ZeroValuebuff,emptybuff,singlecharbuff,timestampbuff,namebuff],24));
+                //Reset the zero value for this client. This client may or may not receive the broadcast sent by the server
+                zerorawvaluedict[macaddr]=[mycurrentrawvalues[macaddr][0],getCurrentLocalTime()];
 			}
+                                 
+              function askForNumber() {
+         
+        }                     
             function calibratescale(macaddr)
 			{
-				/*alert(macaddr);
-                retrive cal factor for this mac addr from the server
-                Show cal factore to the user
-                If user changes the cal factor - 
-                sendback the macaddr, calfactor and timestamp.*/
+				/*
+                Calibration fraction = known weight/ current reading
+                Ask user to input known weight
+                */
+               let userInput = prompt("Please enter the known weight on scale:");
+
+            if (userInput !== null) { // Check if the user clicked "Cancel"
+                let calibweight = parseFloat(userInput);
+                  /*24 bytes as 6 mac, 4 CalibFraction, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name, 1 reserved
+                If byte 13 is set to Z - time stamp will be followed by name 6 bytes*/
+                const macaddrbuff = macAddressToArrayBuffer(macaddr); 
+                //const macaddrbuff = macLast3BytesToAsciiArrayBuffer(macaddr); //6  
+                const CalibFracbuff = fractionToArrayBuffer(calibweight,document.getElementById("reading"+macaddr).innerHTML);   //4               
+                const emptybuff = new ArrayBuffer(2);//2
+                new Uint8Array(emptybuff).set([0, 0]);
+                const singlecharbuff = charToArrayBuffer('C');//1
+                const timestampbuff = signedIntToArrayBuffer(getcurrentUTCepochseconds(),4);//4
+                //Send binary frame to server
+                websock.send(memcopyArrayBuffers([macaddrbuff,CalibFracbuff,emptybuff,singlecharbuff,timestampbuff],24));
+                //Reset the CalibFrac value for this client. This client may or may not receive the broadcast sent by the server
+                calibrationfactordict[macaddr]=[calibweight/document.getElementById("reading"+macaddr).innerHTML,getCurrentLocalTime()];
                 
+                                 
+                if (!isNaN(calibweight)) {
+                    alert("You entered the number: " + calibweight);
+                } else {
+                    alert("That's not a valid number!");
+                }
+            } else {
+                alert("You cancelled the prompt.");
+            }    
+                                 
+                                 
+                                 
+                                 
 			}
 			function stopsave(){
 				

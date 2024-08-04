@@ -40,13 +40,11 @@ Sort out tare, what to store, taring/zeroing etc.
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-//#include "FS.h" //LittleFS
 #include "LittleFS.h"
 #include <ArduinoOTA.h>
 #include <string.h>
 #include <espnow.h>
-//#include <SPIFFS.h>
-//#include <SPIFFSEditor.h>
+
 
 char mydata[8]; 
 char macaddr[6];
@@ -56,7 +54,6 @@ int myintbytes;
 //int calibrationfactor=1;
 int mytarereading=0;
 bool dataavailable = false;
-
 
 void onDataReceiver(uint8_t * mac, uint8_t *incomingData, uint8_t len) {
   memcpy(mydata,incomingData,8);
@@ -102,9 +99,159 @@ AsyncWebSocket webSocket("/ws");
 
 unsigned long currESPSecs, currTime,timestamp, zeroTime;
 
-void handlecommandsfromwebsocketclients(char * datasentbywebsocketclient){
-  //Commands will include the MAC Address - Tare or MAC Address - save common name or MAC Address 
+bool readFileToCharArray(const char* path, char* buffer, size_t offset, size_t bufferSize) {
+    Serial.printf("Reading file");
+
+    // Open the file for reading
+    File file = LittleFS.open(path, "r");
+    if (!file) {
+        Serial.println("Failed to open file for reading");
+        return false;
+    }
+
+    // Read the file contents into the buffer
+    size_t index = offset;
+    while (file.available() && index < bufferSize) { 
+        buffer[index++] = file.read();
+    }
+
+  
+
+    Serial.println("File read into buffer:");
+    
+
+    // Close the file
+    file.close();
+    return true;
+}
+
+
+void writeFileFromBuffer(const char* path, const char* buffer, size_t bufferSize) {
+    Serial.printf("Writing file");
+
+    // Open the file for writing (creating it if it doesn't exist)
+    File file = LittleFS.open(path, "w");
+    if (!file) {
+        Serial.println("Failed to open file for writing");
+        return;
+    }
+
+    // Write buffer contents to the file
+    size_t written = file.write((const uint8_t*)buffer, bufferSize);
+    if (written == bufferSize) {
+        Serial.println("File written successfully");
+    } else {
+        Serial.printf("Write failed, wrote %u bytes\n", written);
+    }
+
+    // Close the file
+    file.close();
+}
+
+
+
+
+
+
+void handlecommandsfromwebsocketclients(uint8_t *datasentbywebsocketclient, size_t len){
+  /*Commands will include the MAC Address - Zeroraw value or calibrationfactor- binaryepochsecondstimestamp and common name (with zero, not with calib) 
+  24 bytes as 6 mac, 4 Zerorawvalue or Calibfactor, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name, 1 reserved
+                If byte 13 is set to Z - time stamp will be followed by name 6 bytes */
+  
+  Serial.println("Handling command data");
+ //Only process data further if it is 24 bytes 
+ if(len >= 24) { 
+      for (size_t i = 0; i < len; i++) {
+        Serial.printf("%02x ", datasentbywebsocketclient[i]);
+    }
+    Serial.println();
+  
+   //Copy the first 6 bytes as macaddr 
+char nodeMacaddr[6]; 
+memcpy(nodeMacaddr,datasentbywebsocketclient,6);
+ 
+ 
+ /*1) Create/Overwrite file with filename being the MACAddress from the received message if it is calibrate. Append/Change the Zero data if it is Zero
+    One file for each node, named Zmacaddress -18 bytes, first 4 bytes [0-3] contain Zero raw value, next 2B[4-5] blank, next 1B[6] Z, next 4 bytes [7-10] contain binary zero timestamp, next 6 bytes [11-16]contain name, [17] - Null terminator
+    One file for each node, named Cmacaddress- 18 bytes first 4 bytes [0-3] contain Calibration Data, next 2B[4-5] blank, next 1B[6] C, next 4 bytes [7-10] contain calibration timestamp, next 6 bytes [11-16]contain zeroes,  [17] - Null terminator
+       
+  */
+  
+if(datasentbywebsocketclient[12]=='Z'){
+ char zerofiledata[18];
+ 
+ memcpy(zerofiledata,datasentbywebsocketclient+6,17);
+zerofiledata[17]= '\0';
+ 
+ char filename[8];
+ filename[6]='Z';
+ filename[7]= '\0'; //char array is null-terminated to ensure it can be used as a C-style string.
+ memcpy(filename,nodeMacaddr,6);
+ 
+writeFileFromBuffer(filename,zerofiledata,18);
+//2) Broadcast the message to all connected webclients
+  webSocket.binaryAll(datasentbywebsocketclient, len);
+ 
+  } else if (datasentbywebsocketclient[12]=='C'){
+  
+  char calibfiledata[18];
+  
+ memcpy(calibfiledata,datasentbywebsocketclient+6,18);
+ calibfiledata[17] = '\0';
+ char filename[8];
+ filename[6]='C';
+ filename[7]= '\0';
+ memcpy(filename,nodeMacaddr,6);
+ 
+writeFileFromBuffer(filename,calibfiledata,18);
+//2) Broadcast the message to all connected webclients
+  webSocket.binaryAll(datasentbywebsocketclient, len);
   }
+  else if (datasentbywebsocketclient[12]=='z'){
+  //
+  char sendsaveddata[24];
+  //24 bytes as 6 mac, 4 Zero or Calib, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name 
+ char filename[8];
+ filename[6]='Z';
+ filename[7]= '\0';
+ memcpy(filename,nodeMacaddr,6);
+ //read the contents of the file in sendsaveddata buffer
+if (readFileToCharArray(filename,sendsaveddata,6,18)){
+//add the mac address
+memcpy(sendsaveddata,nodeMacaddr,6);
+//send the data to clients
+//2) Broadcast the message to all connected webclients
+  webSocket.binaryAll(sendsaveddata, 24);
+}
+else {
+  //File read failed. either it doesn't exist or can't be read
+  }
+  }
+ else if (datasentbywebsocketclient[12]=='c'){
+  //
+  char sendsaveddata[24];
+  //24 bytes as 6 mac, 4 Zero or Calib, 2 blank, 1 (ZorC), 4 binary timestamp, 6 binary Name 
+ char filename[8];
+ filename[6]='C';
+ filename[7]= '\0';
+ memcpy(filename,nodeMacaddr,6);
+ //read the contents of the file in sendsaveddata buffer
+if (readFileToCharArray(filename,sendsaveddata,6,18)){
+//add the mac address
+memcpy(sendsaveddata,nodeMacaddr,6);
+//send the data to clients
+//2) Broadcast the message to all connected webclients
+  webSocket.binaryAll(sendsaveddata, 24);
+}
+else {
+  //File read failed. either it doesn't exist or can't be read
+  }
+
+  }
+ 
+ }
+
+}
 
 //flag to use from web update to reboot the ESP
 bool shouldReboot = false;
@@ -156,7 +303,7 @@ void onEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTyp
     //pong message was received (in response to a ping request maybe)
     os_printf("ws[%s][%u] pong[%u]: %s\n", server->url(), client->id(), len, (len)?(char*)data:"");
   } else if(type == WS_EVT_DATA){
-    //data packet
+  
     AwsFrameInfo * info = (AwsFrameInfo*)arg;
     if(info->final && info->index == 0 && info->len == len){
       //the whole message is in a single frame and we got all of it's data
@@ -164,17 +311,21 @@ void onEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTyp
       if(info->opcode == WS_TEXT){
         data[len] = 0;
         os_printf("%s\n", (char*)data);
-        //handlecommandsfromwebsocketclients(data);
+//        
       } else {
         for(size_t i=0; i < info->len; i++){
           os_printf("%02x ", data[i]);
         }
         os_printf("\n");
       }
-      if(info->opcode == WS_TEXT)
-        client->text("I got your text message");
-      else
-        client->binary("I got your binary message");
+      if(info->opcode == WS_TEXT){
+        //client->text("I got your text message");
+      }
+      else{
+        //client->binary("I got your binary message");
+      }
+    
+        
     } else {
       //message is comprised of multiple frames or the frame is split into multiple packets
       if(info->index == 0){
@@ -198,13 +349,18 @@ void onEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventTyp
         os_printf("ws[%s][%u] frame[%u] end[%llu]\n", server->url(), client->id(), info->num, info->len);
         if(info->final){
           os_printf("ws[%s][%u] %s-message end\n", server->url(), client->id(), (info->message_opcode == WS_TEXT)?"text":"binary");
-          if(info->message_opcode == WS_TEXT)
-            client->text("I got your text message");
-          else
-            client->binary("I got your binary message");
+          if(info->message_opcode == WS_TEXT){
+           // client->text("I got your text message");
+          }
+          else {
+         //   client->binary("I got your binary message");
+        }
         }
       }
     }
+ //data packet
+    handlecommandsfromwebsocketclients(data,len);
+    
   }
 }
 
@@ -217,6 +373,8 @@ return fs_info.usedBytes;
 //fs_info.totalBytes 
   
   }
+
+ 
 
 void handledatafromnodes(char *sendermacaddress,char *datatobeprocessed){
   //Data arrives as 4bytes of float -scale reading and 2 bytes of integer - batteryvoltage
