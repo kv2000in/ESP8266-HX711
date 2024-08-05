@@ -31,8 +31,8 @@ unsigned long myTime;
 HX711 scale;
 
 
-int R1=22;//22k
-int R2=10;//10k
+int R1=10;//22k
+int R2=1;//2.2k
 
 bool DEBUG = false; //espnow call back function was wrapped inside debug - which was causing reset
 
@@ -52,7 +52,7 @@ else {
         else 
         {
     
-          if (DEBUG){Serial.println("ESP-NOW send failed");}
+          os_printf("ESP-NOW send failed\n");
         }
 
       }
@@ -78,16 +78,16 @@ batteryVoltage = ((analogRead(A0)*(1.1/1024))*((R1+R2)/R2))*1000;
 
 float reading; 
 //scale.set_scale(226.626); 
-scale.set_scale(1);
+scale.set_scale(100.f);
 do {delayMicroseconds(10);}
 while (not (scale.is_ready()));
 
-if (DEBUG) {Serial.print("After Scale is Ready"); myTime = millis(); Serial.println(myTime); }//130 mSec
-
-reading = scale.get_units(10); 
 
 
-if (DEBUG) {Serial.println(reading);}
+reading = scale.read_average(20); //average of 20 readings from the ADC
+
+
+os_printf("Reading: %d",reading);
 
 //memcpy(str,&reading,sizeof(reading));
 memcpy(str,&reading,4);//size of float = 4 bytes
@@ -95,7 +95,7 @@ memcpy(str+sizeof(reading),&batteryVoltage,sizeof(batteryVoltage));
 memcpy(str+4,&batteryVoltage,2); //size of int = 2 bytes
 scale.power_down();
 delay(5);
-  if (DEBUG) {Serial.print("CreateDataend"); myTime = millis(); Serial.println(myTime);} //1006 mSec
+  os_printf("CreateDataend \n"); myTime = millis(); Serial.println(myTime); //1006 mSec
   }
 void prepareESPNOW() {
 WiFi.mode(WIFI_STA);
@@ -103,7 +103,7 @@ WiFi.persistent( false );
 resendcounter=0;
     // Initializing the ESP-NOW
   if (esp_now_init() != 0) {
-    if (DEBUG){Serial.println("Problem during ESP-NOW init");}
+    os_printf("Problem during ESP-NOW init\n");
     return;
   }
   esp_now_set_self_role(ESP_NOW_ROLE_CONTROLLER);
@@ -111,7 +111,8 @@ resendcounter=0;
   //Serial.println("Registering a peer");
   esp_now_add_peer(peer0, ESP_NOW_ROLE_SLAVE, 1, NULL, 0);
  
-  if(DEBUG){ Serial.println("Registering send callback function");}
+  os_printf("Registering send callback function\n");
+ 
   esp_now_register_send_cb(onSent);
 
 }
