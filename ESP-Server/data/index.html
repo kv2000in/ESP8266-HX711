@@ -5,8 +5,12 @@
 		<meta name = "viewport" content = "width = device-width, initial-scale = 1.0, maximum-scale = 1.0, user-scalable=0">
 			<title>Transducer Height Project</title>
 			<style>
-				"body { background-color: #808080; font-family: Arial, Helvetica, Sans-Serif; Color: #000000; }"
-				</style>
+body {
+    background-color: #808080;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #000000;
+}
+</style>
 			<style>
 
                 td{
@@ -31,6 +35,8 @@
 				var websock;
 				var boolClientactive;
                 var boolHasZeroBeenDone = false;
+                // Initialize the dictionary object to store readings
+                const myReadings = {};
 				
 				function start() {
 					
@@ -256,7 +262,9 @@
                 function handlecleanedupdata(macaddr,rawreading,battery,mytime){
                   /*create or update an entry in to the rawvalues dict and add the current values*/
                       mycurrentrawvalues[macaddr]=[rawreading,battery,mytime];
-                    
+                      if (!myReadings[macaddr]) {
+        myReadings[macaddr] = [];
+                                }
                     var mydatalist = document.getElementById("availablesensors");
                   var n;
                   var alreadypresent="false";
@@ -279,7 +287,11 @@
                     document.getElementById("battery"+macaddr).innerHTML=battery;
                       document.getElementById("time"+macaddr).innerHTML=mytime;
                               
-                              
+                              myReadings[macaddr].push({
+        reading:document.getElementById("reading" + macaddr).innerHTML ,
+        timestamp: mytime,
+        battery:   battery
+                                    });    
                               break;
                           }
 
@@ -630,6 +642,54 @@ function tarescale(macaddr)
 				var n = (d.getTime()/1000);
 				doSend("TIME-"+n);
 			}
+                
+                
+    document.getElementById('export-text').addEventListener('click', () => {
+    exportToText(document.getElementById("livesensornodes" ).value);
+});
+
+document.getElementById('export-csv').addEventListener('click', () => {
+    exportToCSV(document.getElementById("livesensornodes" ).value);
+});
+                
+                
+        function exportToText(paramMacAddr) {
+            
+    let text = '';
+    
+    for (const eachDataRow of myReadings[paramMacAddr]) 
+        {
+          text += `Timestamp: ${eachDataRow.timestamp}, Reading: ${eachDataRow.reading}, Battery: ${eachDataRow.battery}\n`; 
+        }
+
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'data.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+} 
+                
+function exportToCSV(paramMacAddr) {
+    let csv = 'Timestamp,Reading,Battery\n';
+    
+    for (const eachDataRow of myReadings[paramMacAddr]) 
+        {
+          csv += `${eachDataRow.timestamp},${eachDataRow.reading},${eachDataRow.battery}\n`;  
+        }
+  
+    
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'data.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+}                
+                
 			</script>
 	</head>
 	<body onpageshow="javascript:start();">
@@ -643,11 +703,10 @@ Server returns data as
         
 		<div><b>Digital Scale Server</b></div> 
 		<label>Available Scales</label>
-        <input list="availablesensors">
+        <input id="livesensornodes" list="availablesensors">
 		
-		<a href="/Data.txt">Download Data</a>
-		<br><br>
-		<a href="/Zero.txt">Download Zero File</a>
+<button id="export-text">Export as Text</button>
+<button id="export-csv">Export as CSV</button>
 		<br><br>
 		<button id = "btCLOSEWS" onclick="websock.close();">Close Websocket</button>
 		<br>

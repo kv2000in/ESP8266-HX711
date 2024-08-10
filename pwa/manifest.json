@@ -1,0 +1,14 @@
+{
+"short_name": "Smart Scale",
+"start_url": "./index.html",
+"icons": [
+{
+"src": "./icon-512.png",
+"sizes": "512x512"
+}
+],
+"display": "standalone",
+"name": "Smart Scale",
+"theme_color": "#000000",
+"background_color": "#000000"
+}
