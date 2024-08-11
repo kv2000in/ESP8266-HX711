@@ -58,7 +58,9 @@ button:disabled {
     border-radius: 5px;
     text-align: center;
 }
-
+    .inputname{
+        width:6ch;
+    }
     
 </style>
 
@@ -89,12 +91,12 @@ Server returns data as
     </div>
 </div>
 <br><br>
-<button id = "btCLOSEWS" onclick="websock.close();">Close Websocket</button>
-<button id = "btOPENWS" onclick="start();">Open Websocket Websocket</button>
+<button id = "btCLOSEWS" onclick="websock.close();">Close</button>
+<button id = "btOPENWS" onclick="start();">Connect</button>
 <br>
 <table id="sensortable">
 <tr id = "tableheadings">
-<td class = "td-hidden">MacAddr</td>
+<td>MacAddr</td>
 <td>Name</td>
 <td class = "td-hidden">RawReading</td>
 <td class = "td-hidden">CalibrationFactor</td>
@@ -431,9 +433,9 @@ var myrow = document.getElementById("row"+macaddr);
 /*Add columns to the new row*/
 const newele2 = document.createElement("td");
 newele2.setAttribute("id","addr"+macaddr);
-newele2.setAttribute("class","td-hidden");
 const newele2a = document.createElement("td");
 newele2a.setAttribute("id","nametd"+macaddr);
+newele2a.setAttribute("class","inputname");
 const newele3 = document.createElement("td");
 newele3.setAttribute("id","rawreading"+macaddr);
 newele3.setAttribute("class","td-hidden");
