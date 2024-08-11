@@ -39,7 +39,27 @@ button:disabled {
     background-color: #ddd; /* Light gray */
     color: #666; /* Darker gray */
     cursor: not-allowed; /* Show a not-allowed cursor */
-}    
+} 
+#paramModal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#modalContent {
+    background-color: white;
+    padding: 20px;
+    border-radius: 5px;
+    text-align: center;
+}
+
+    
 </style>
 
 </head>
@@ -59,6 +79,15 @@ Server returns data as
 <button id="export-text">Export as Text</button>
 <button id="export-csv">Export as CSV</button>
     <button id="plot-data">Plot Data</button>
+    <!-- Modal -->
+<div id="paramModal" style="display: none;">
+    <div id="modalContent">
+        <p>Select parameter to plot:</p>
+        <button id="plot-reading">Reading</button>
+        <button id="plot-battery">Battery</button>
+        <button id="close-modal">Close</button>
+    </div>
+</div>
 <br><br>
 <button id = "btCLOSEWS" onclick="websock.close();">Close Websocket</button>
 <button id = "btOPENWS" onclick="start();">Open Websocket Websocket</button>
@@ -741,14 +770,44 @@ document.getElementById('export-csv').addEventListener('click', () => {
 exportToCSV(document.getElementById("livesensornodes" ).value);
 });
 
-    document.getElementById('plot-data').addEventListener('click', () => {
-    plotData(document.getElementById("livesensornodes" ).value);
+document.getElementById('plot-data').addEventListener('click', () => {
+    // Show the modal
+    document.getElementById('paramModal').style.display = 'flex';
 });
+
+document.getElementById('plot-reading').addEventListener('click', () => {
+    handleModalSelection('reading');
+});
+
+document.getElementById('plot-battery').addEventListener('click', () => {
+    handleModalSelection('battery');
+});
+
+document.getElementById('close-modal').addEventListener('click', () => {
+    // Close the modal
+    document.getElementById('paramModal').style.display = 'none';
+});
+
+function handleModalSelection(param2plot) {
+    // Get the MAC address from the input field
+    const macAddr = document.getElementById("livesensornodes").value;
+
+    // Call plotData with the selected parameter
+    plotData(macAddr, param2plot);
+
+    // Close the modal
+    document.getElementById('paramModal').style.display = 'none';
+}
+
 
 
 
 function exportToText(paramMacAddr) {
-
+   // Check if myReadings[paramMacAddr] is empty or null
+    if (!myReadings[paramMacAddr] || myReadings[paramMacAddr].length === 0) {
+        console.error(`No data available for MAC Address: ${paramMacAddr}`);
+        return; // Exit the function if there's no data
+    }
 let text = '';
 
 for (const eachDataRow of myReadings[paramMacAddr]) 
@@ -766,6 +825,11 @@ URL.revokeObjectURL(url);
 } 
 
 function exportToCSV(paramMacAddr) {
+       // Check if myReadings[paramMacAddr] is empty or null
+    if (!myReadings[paramMacAddr] || myReadings[paramMacAddr].length === 0) {
+        console.error(`No data available for MAC Address: ${paramMacAddr}`);
+        return; // Exit the function if there's no data
+    }
 let csv = 'Timestamp,Reading,Battery\n';
 
 for (const eachDataRow of myReadings[paramMacAddr]) 
@@ -785,6 +849,11 @@ URL.revokeObjectURL(url);
 }                
 
 function plotData(paramMacAddr, param2plot) {
+       // Check if myReadings[paramMacAddr] is empty or null
+    if (!myReadings[paramMacAddr] || myReadings[paramMacAddr].length === 0) {
+        console.error(`No data available for MAC Address: ${paramMacAddr}`);
+        return; // Exit the function if there's no data
+    }
     const ctx = document.getElementById('data-chart').getContext('2d');
     const datasets = [];
 
