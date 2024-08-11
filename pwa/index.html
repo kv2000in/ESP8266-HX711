@@ -18,7 +18,7 @@
     
 <style>
 body {
-background-color: #808080;
+background-color: #e7edce;
 font-family: Arial, Helvetica, sans-serif;
 color: #000000;
 }
@@ -74,7 +74,25 @@ Server returns data as
 
 -->
 
-<div><b>Digital Scale Server</b></div> 
+<div><b>Digital Scale Server</b> <button id = "btOPENWS" onclick="start();">Connect</button> <button id = "btCLOSEWS" onclick="websock.close();">Close</button>
+</div> 
+
+
+<br>
+<table id="sensortable">
+<tr id = "tableheadings">
+<td>MacAddr</td>
+<td>Name</td>
+<td class = "td-hidden">RawReading</td>
+<td class = "td-hidden">CalibrationFactor</td>
+<td>Reading</td>
+<td>Battery</td>
+<td>Timestamp</td>
+<td class = "td-actions">Actions</td>
+</tr>
+</table>
+<br>
+<br>
 <label>Available Scales</label>
 <input id="livesensornodes" list="availablesensors">
 
@@ -91,22 +109,6 @@ Server returns data as
     </div>
 </div>
 <br><br>
-<button id = "btCLOSEWS" onclick="websock.close();">Close</button>
-<button id = "btOPENWS" onclick="start();">Connect</button>
-<br>
-<table id="sensortable">
-<tr id = "tableheadings">
-<td>MacAddr</td>
-<td>Name</td>
-<td class = "td-hidden">RawReading</td>
-<td class = "td-hidden">CalibrationFactor</td>
-<td>Reading</td>
-<td>Battery</td>
-<td>Timestamp</td>
-<td class = "td-actions">Actions</td>
-</tr>
-</table>
-
 <datalist id="availablesensors">
 </datalist>
 <canvas id="data-chart" width="400" height="200"></canvas>
@@ -414,6 +416,7 @@ Fill up the columns with data*/
 
 
 document.getElementById("addr"+macaddr).innerHTML=macaddr;
+document.getElementById("nametd"+macaddr).innerHTML=macaddr;
 /*User assignment of names - may be store it on the server*/
 updateReading(macaddr);
 //document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvaluedict[macaddr][0])/100)*eval(calibrationfactordict[macaddr][0])); /*eval is dangerous*/
@@ -447,6 +450,7 @@ var myrow = document.getElementById("row"+macaddr);
 /*Add columns to the new row*/
 const newele2 = document.createElement("td");
 newele2.setAttribute("id","addr"+macaddr);
+newele2.setAttribute("class","td-hidden");
 const newele2a = document.createElement("td");
 newele2a.setAttribute("id","nametd"+macaddr);
 newele2a.setAttribute("class","inputname");
@@ -491,10 +495,12 @@ newele8.setAttribute("onclick","calibratescale('"+macaddr+"')");
 newele8.innerHTML="Calibrate";
 document.getElementById("actions"+macaddr).appendChild(newele7);
 document.getElementById("actions"+macaddr).appendChild(newele8);
-const newele2aa = document.createElement("input");
-newele2aa.setAttribute("id","nameinput"+macaddr);
-newele2aa.setAttribute("class","inputname");
+const newele2aa = document.createElement("br");
+const newele2ab = document.createElement("input");
+newele2ab.setAttribute("id","nameinput"+macaddr);
+newele2ab.setAttribute("class","inputname");
 document.getElementById("nametd"+macaddr).appendChild(newele2aa);
+document.getElementById("nametd"+macaddr).appendChild(newele2ab);
 
 }
 
@@ -905,7 +911,7 @@ function plotData(paramMacAddr, param2plot) {
                 x: {
                     type: 'time',
                     time: {
-                        unit: 'day' // Change as needed (e.g., 'hour', 'minute')
+                        unit: 'minute' // Change as needed (e.g., 'hour', 'minute')
                     },
                     title: {
                         display: true,
