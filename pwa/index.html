@@ -62,6 +62,10 @@ button:disabled {
         width:6ch;
     }
     
+.input-container {
+    position: relative;
+    display: inline-block;
+}
 .tooltip {
     visibility: hidden;
     width: 200px; /* Adjust as needed */
@@ -79,7 +83,7 @@ button:disabled {
     transition: opacity 0.3s;
 }
 
-    .inputname:hover .tooltip {
+.input-container:hover .tooltip {
     visibility: visible;
     opacity: 1;
 }
@@ -115,12 +119,12 @@ Server returns data as
 </table>
 <br>
 <br>
-<label>Available Scales</label>
-<input id="livesensornodes" list="availablesensors">
 
-<button id="export-text">Export as Text</button>
-<button id="export-csv">Export as CSV</button>
-    <button id="plot-data">Plot Data</button>
+<!--<input id="livesensornodes" list="availablesensors">-->
+
+<button id="export-text" disabled>Export as Text</button>
+<button id="export-csv" disabled>Export as CSV</button>
+    <button id="plot-data" disabled>Plot Data</button>
     <!-- Modal -->
 <div id="paramModal" style="display: none;">
     <div id="modalContent">
@@ -227,7 +231,8 @@ websock.onopen = function(evt) { console.log('websock open');
 
 
 };
-websock.onclose = function(evt) { console.log('websock close'); };
+websock.onclose = function(evt) { // Export data for all MAC addresses
+    exportAllData(); console.log('websock close'); };
 websock.onerror = function(evt) { console.log(evt); };
 websock.onmessage = function(evt) {
 
@@ -481,71 +486,111 @@ if (alreadypresent=="false"){
 
 
 /*Add this MAC address to the list of all online MAC addresses */
-const newele0=document.createElement("Option");
-newele0.value=macaddr;
-mydatalist.appendChild(newele0);
+const neweleopt=document.createElement("Option");
+neweleopt.value=macaddr;
+mydatalist.appendChild(neweleopt);
+    
 /*Expand the sensortable to add another row with children whose id is assigned by concatenating macaddress*/
-const newele1=document.createElement("tr");
-newele1.setAttribute("id","row"+macaddr);
+const neweletr=document.createElement("tr");
+neweletr.setAttribute("id","row"+macaddr);
 var mytable = document.getElementById("sensortable");
-mytable.appendChild(newele1);
+mytable.appendChild(neweletr);
 var myrow = document.getElementById("row"+macaddr);
+
 /*Add columns to the new row*/
-const newele2 = document.createElement("td");
-newele2.setAttribute("id","addr"+macaddr);
-newele2.setAttribute("class","td-hidden");
-const newele2a = document.createElement("td");
-newele2a.setAttribute("id","nametd"+macaddr);
-newele2a.setAttribute("class","inputname");
-const newele3 = document.createElement("td");
-newele3.setAttribute("id","rawreading"+macaddr);
-newele3.setAttribute("class","td-hidden");
-const newele3a = document.createElement("td");
-newele3a.setAttribute("id","calibrationfactor"+macaddr);
-newele3a.setAttribute("class","td-hidden");
-const newele3b = document.createElement("td");
-newele3b.setAttribute("id","reading"+macaddr);
-const newele4 = document.createElement("td");
-newele4.setAttribute("id","battery"+macaddr);
-const newele5 = document.createElement("td");
-newele5.setAttribute("id","time"+macaddr);
-const newele6 = document.createElement("td");
-newele6.setAttribute("id","actions"+macaddr);
-newele6.setAttribute("class","td-actions");
-myrow.appendChild(newele2);
-myrow.appendChild(newele2a);
-myrow.appendChild(newele3);
-myrow.appendChild(newele3a);
-myrow.appendChild(newele3b);
-myrow.appendChild(newele4);
-myrow.appendChild(newele5);
-myrow.appendChild(newele6);
-/*Fill up the columns with data*/
+const neweletd1 = document.createElement("td");
+neweletd1.setAttribute("id","addr"+macaddr);
+neweletd1.setAttribute("class","td-hidden");
+myrow.appendChild(neweletd1);
 document.getElementById("addr"+macaddr).innerHTML=macaddr;
-/*User assignment of names - may be store it on the server*/
+   
+const neweletd2 = document.createElement("td");
+neweletd2.setAttribute("id","nametd"+macaddr);
+neweletd2.setAttribute("class","inputname");
+myrow.appendChild(neweletd2);
+
+const neweletd2a = document.createElement("div");
+neweletd2a.setAttribute("id","divinput"+macaddr);
+neweletd2a.setAttribute("class","input-container");
+document.getElementById("nametd"+macaddr).appendChild(neweletd2a);
+
+const neweletd2ac = document.createElement("input");
+neweletd2ac.setAttribute("id","radioinput"+macaddr);
+neweletd2ac.setAttribute("name","row-select");
+neweletd2ac.setAttribute("value",macaddr);
+document.getElementById("divinput"+macaddr).appendChild(neweletd2ac);
+
+const neweletd2aa = document.createElement("input");
+neweletd2aa.setAttribute("id","nameinput"+macaddr);
+neweletd2aa.setAttribute("class","inputname");
+document.getElementById("divinput"+macaddr).appendChild(neweletd2aa);
+
+const neweletd2ab = document.createElement("span");
+neweletd2ab.setAttribute("id","nametooltip"+macaddr);
+neweletd2ab.setAttribute("class","tooltip");
+document.getElementById("divinput"+macaddr).appendChild(neweletd2ab);
+    
+    
+const neweletd3 = document.createElement("td");
+neweletd3.setAttribute("id","rawreading"+macaddr);
+neweletd3.setAttribute("class","td-hidden");
+myrow.appendChild(neweletd3);
 document.getElementById("rawreading"+macaddr).innerHTML=rawreading;
-document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvaluedict[macaddr][0])/100)*eval(calibrationfactordict[macaddr][0]));/*eval is dangerous*/
+    
+const neweletd4 = document.createElement("td");
+neweletd4.setAttribute("id","calibrationfactor"+macaddr);
+neweletd4.setAttribute("class","td-hidden");
+myrow.appendChild(neweletd4);
+    
+const neweletd5 = document.createElement("td");
+neweletd5.setAttribute("id","reading"+macaddr);
+myrow.appendChild(neweletd5);
+updateReading(macaddr);
+    
+const neweletd6 = document.createElement("td");
+neweletd6.setAttribute("id","battery"+macaddr);
+myrow.appendChild(neweletd6);
 document.getElementById("battery"+macaddr).innerHTML=battery;
+
+    
+const neweletd7 = document.createElement("td");
+neweletd7.setAttribute("id","time"+macaddr);
+myrow.appendChild(neweletd7);
 document.getElementById("time"+macaddr).innerHTML=mytime;
+
+    
+const neweletd8 = document.createElement("td");
+neweletd8.setAttribute("id","actions"+macaddr);
+neweletd8.setAttribute("class","td-actions");
+myrow.appendChild(neweletd8);
+    
 /*Actions Zero/Tare, Calibrate*/
-const newele7 = document.createElement("button");
-newele7.setAttribute("id","zero"+macaddr);
-newele7.innerHTML="Zero";
-newele7.setAttribute("onclick","tarescale('"+macaddr+"')");
-const newele8 = document.createElement("button");
-newele8.setAttribute("id","calibrate"+macaddr);
-newele8.setAttribute("onclick","calibratescale('"+macaddr+"')");
-newele8.innerHTML="Calibrate";
-document.getElementById("actions"+macaddr).appendChild(newele7);
-document.getElementById("actions"+macaddr).appendChild(newele8);
-const newele2ab = document.createElement("input");
-newele2ab.setAttribute("id","nameinput"+macaddr);
-newele2ab.setAttribute("class","inputname");
-document.getElementById("nametd"+macaddr).appendChild(newele2ab);
-const newele2aa = document.createElement("span");
-newele2aa.setAttribute("id","nametooltip"+macaddr);
-newele2aa.setAttribute("class","tooltip");
-document.getElementById("nametd"+macaddr).appendChild(newele2aa);
+const neweletd8a = document.createElement("button");
+neweletd8a.setAttribute("id","zero"+macaddr);
+neweletd8a.innerHTML="Zero";
+neweletd8a.setAttribute("onclick","tarescale('"+macaddr+"')");
+document.getElementById("actions"+macaddr).appendChild(neweletd8a);
+
+const neweletd8b = document.createElement("button");
+neweletd8b.setAttribute("id","calibrate"+macaddr);
+neweletd8b.setAttribute("onclick","calibratescale('"+macaddr+"')");
+neweletd8b.innerHTML="Calibrate";
+document.getElementById("actions"+macaddr).appendChild(neweletd8b);
+
+
+/*Fill up the columns with data*/
+
+/*User assignment of names - may be store it on the server*/
+
+//document.getElementById("reading"+macaddr).innerHTML=Math.round(((rawreading-zerorawvaluedict[macaddr][0])/100)*eval(calibrationfactordict[macaddr][0]));/*eval is dangerous*/
+
+
+
+
+    
+
+
+
 
 }
 
@@ -830,7 +875,52 @@ doSend("TIME-"+n);
 }
 
 
+document.addEventListener('DOMContentLoaded', (event) => {
+    
+    
+    
+    
+
+    function toggleButtons() {
+    const selectedRow = getSelectedRow();
+    document.getElementById('export-text').disabled = !selectedRow;
+    document.getElementById('export-csv').disabled = !selectedRow;
+    document.getElementById('plot-data').disabled = !selectedRow;
+    }
+
+     // Add event listener to update button states when a row is selected
+    document.querySelectorAll('input[name="row-select"]').forEach(radio => {
+        radio.addEventListener('change', toggleButtons);
+    });
+
+    // Initial check in case the field is pre-checked
+    toggleButtons();
+});
+    
+
+// Function to get selected row
+function getSelectedRow() {
+    const selectedRadio = document.querySelector('input[name="row-select"]:checked');
+    if (selectedRadio) {
+        return selectedRadio.value;
+         
+    }
+    return null;
+} 
+        
 document.getElementById('export-text').addEventListener('click', () => {
+exportToText(getSelectedRow());
+});
+
+document.getElementById('export-csv').addEventListener('click', () => {
+exportToCSV(getSelectedRow());
+});
+
+document.getElementById('plot-data').addEventListener('click', () => {
+   plotData(getSelectedRow());
+});
+    
+/*document.getElementById('export-text').addEventListener('click', () => {
 exportToText(document.getElementById("livesensornodes" ).value);
 });
 
@@ -840,7 +930,7 @@ exportToCSV(document.getElementById("livesensornodes" ).value);
 
 document.getElementById('plot-data').addEventListener('click', () => {
    plotData(document.getElementById("livesensornodes" ).value);
-});
+});*/
 
 
 
@@ -883,18 +973,30 @@ for (const eachDataRow of myReadings[paramMacAddr])
 {
 csv += `${eachDataRow.timestamp},${eachDataRow.reading},${eachDataRow.battery}\n`;  
 }
-
-
-
-const blob = new Blob([csv], { type: 'text/csv' });
-const url = URL.createObjectURL(blob);
-const a = document.createElement('a');
-a.href = url;
-a.download = getCurrentLocalTime()+paramMacAddr+'.csv';
-a.click();
-URL.revokeObjectURL(url);
+ const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = getCurrentLocalTime() + paramMacAddr + '.csv';
+    document.body.appendChild(a); // Required for Firefox
+    a.click();
+    document.body.removeChild(a); // Clean up
+    URL.revokeObjectURL(url);
+    
 }                
 
+function exportAllData() {
+    const datalist = document.getElementById('availablesensors');
+    const options = datalist.querySelectorAll('option');
+    
+    options.forEach(option => {
+        const macAddr = option.value;
+        if (macAddr) {
+            exportToCSV(macAddr);
+        }
+    });
+}        
+        
 // Global variable to store the chart instance
 let myChart;
 
@@ -1169,26 +1271,7 @@ console.error("Service workers are not supported.");
 }); 
 
         
-document.addEventListener('DOMContentLoaded', (event) => {
-    const inputField = document.getElementById('livesensornodes');
-    const exportTextButton = document.getElementById('export-text');
-    const exportCsvButton = document.getElementById('export-csv');
-    const plotDataButton = document.getElementById('plot-data');
 
-    function toggleButtons() {
-        const isInputEmpty = inputField.value.trim() === '';
-        exportTextButton.disabled = isInputEmpty;
-        exportCsvButton.disabled = isInputEmpty;
-        plotDataButton.disabled = isInputEmpty;
-    }
-
-    // Check the input field value when typing
-    inputField.addEventListener('input', toggleButtons);
-
-    // Initial check in case the field is pre-filled
-    toggleButtons();
-});
-        
 </script>
     
     
