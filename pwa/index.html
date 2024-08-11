@@ -14,7 +14,7 @@
 <meta property="og:image" content="./icon-512.png">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://kv2000inn.ddns.net:65001/hx711/index.html">
-<script src="./chart.js"></script>
+
     
 <style>
 body {
@@ -34,6 +34,12 @@ display: none;
 .td-actions{
 visibility: visible;
 }
+    
+button:disabled {
+    background-color: #ddd; /* Light gray */
+    color: #666; /* Darker gray */
+    cursor: not-allowed; /* Show a not-allowed cursor */
+}    
 </style>
 
 </head>
@@ -778,30 +784,40 @@ a.click();
 URL.revokeObjectURL(url);
 }                
 
-function plotData(paramMacAddr) {
+function plotData(paramMacAddr, param2plot) {
     const ctx = document.getElementById('data-chart').getContext('2d');
     const datasets = [];
 
-   for (const eachDataRow of myReadings[paramMacAddr]) 
-{
-const data =  `${eachDataRow.timestamp},${eachDataRow.reading},${eachDataRow.battery}\n`;  
-}
-    //Work in progress
-/*    for (const [macAddr, readings] of Object.entries(dataDictionary)) {
-        const data = readings.map(reading => ({
-            x: new Date(reading.timestamp),
-            y: reading.value
-        }));
+    for (const eachDataRow of myReadings[paramMacAddr]) {
+        const dataPoint = {
+            x: new Date(eachDataRow.timestamp)
+        };
+
+        // Set the Y value based on param2plot
+        if (param2plot === 'reading') {
+            dataPoint.y = eachDataRow.reading;
+        } else if (param2plot === 'battery') {
+            dataPoint.y = eachDataRow.battery;
+        } else {
+            console.error('Invalid param2plot value');
+            return; // Exit function if param2plot is invalid
+        }
 
         datasets.push({
-            label: `MAC Address: ${macAddr}`,
-            data: data,
+            label: `MAC Address: ${paramMacAddr}, ${param2plot}`,
+            data: [dataPoint], // Data should be an array
             borderColor: getRandomColor(),
             fill: false
         });
-    }*/
+    }
 
-    new Chart(ctx, {
+    // Clear previous chart if exists
+    if (window.myChart) {
+        window.myChart.destroy();
+    }
+
+    // Create new chart
+    window.myChart = new Chart(ctx, {
         type: 'line',
         data: {
             datasets: datasets
@@ -821,7 +837,7 @@ const data =  `${eachDataRow.timestamp},${eachDataRow.reading},${eachDataRow.bat
                 y: {
                     title: {
                         display: true,
-                        text: 'Reading Value'
+                        text: param2plot.charAt(0).toUpperCase() + param2plot.slice(1)
                     }
                 }
             }
@@ -829,6 +845,7 @@ const data =  `${eachDataRow.timestamp},${eachDataRow.reading},${eachDataRow.bat
     });
 }
 
+// Helper function to get random color
 function getRandomColor() {
     const letters = '0123456789ABCDEF';
     let color = '#';
@@ -838,7 +855,6 @@ function getRandomColor() {
     return color;
 }
 
-    
 navigator.serviceWorker.getRegistration("./").then((registration) => {
 if (registration) {
 console.log(
@@ -861,6 +877,27 @@ console.error("Service workers are not supported.");
 }
 }); 
 
+        
+document.addEventListener('DOMContentLoaded', (event) => {
+    const inputField = document.getElementById('livesensornodes');
+    const exportTextButton = document.getElementById('export-text');
+    const exportCsvButton = document.getElementById('export-csv');
+    const plotDataButton = document.getElementById('plot-data');
+
+    function toggleButtons() {
+        const isInputEmpty = inputField.value.trim() === '';
+        exportTextButton.disabled = isInputEmpty;
+        exportCsvButton.disabled = isInputEmpty;
+        plotDataButton.disabled = isInputEmpty;
+    }
+
+    // Check the input field value when typing
+    inputField.addEventListener('input', toggleButtons);
+
+    // Initial check in case the field is pre-filled
+    toggleButtons();
+});
+        
 </script>
     
     
