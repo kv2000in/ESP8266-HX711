@@ -493,6 +493,7 @@ document.getElementById("actions"+macaddr).appendChild(newele7);
 document.getElementById("actions"+macaddr).appendChild(newele8);
 const newele2aa = document.createElement("input");
 newele2aa.setAttribute("id","nameinput"+macaddr);
+newele2aa.setAttribute("class","inputname");
 document.getElementById("nametd"+macaddr).appendChild(newele2aa);
 
 }
@@ -876,28 +877,12 @@ function plotData(paramMacAddr, param2plot) {
         return; // Exit the function if there's no data
     }
 
-    for (const eachDataRow of myReadings[paramMacAddr]) {
-        const dataPoint = {
-            x: new Date(eachDataRow.timestamp)
+    const dataPoints = myReadings[paramMacAddr].map(eachDataRow => {
+        return {
+            x: new Date(eachDataRow.timestamp),
+            y: param2plot === 'reading' ? eachDataRow.reading : eachDataRow.battery
         };
-
-        // Set the Y value based on param2plot
-        if (param2plot === 'reading') {
-            dataPoint.y = eachDataRow.reading;
-        } else if (param2plot === 'battery') {
-            dataPoint.y = eachDataRow.battery;
-        } else {
-            console.error('Invalid param2plot value');
-            return; // Exit function if param2plot is invalid
-        }
-
-        datasets.push({
-            label: `MAC Address: ${paramMacAddr}, ${param2plot}`,
-            data: [dataPoint], // Data should be an array
-            borderColor: getRandomColor(),
-            fill: false
-        });
-    }
+    });
 
     // Clear previous chart if exists
     if (myChart) {
@@ -908,14 +893,19 @@ function plotData(paramMacAddr, param2plot) {
     myChart = new Chart(ctx, {
         type: 'line',
         data: {
-            datasets: datasets
+            datasets: [{
+                label: `MAC Address: ${paramMacAddr}, ${param2plot}`,
+                data: dataPoints,
+                borderColor: getRandomColor(),
+                fill: false
+            }]
         },
         options: {
             scales: {
                 x: {
                     type: 'time',
                     time: {
-                        unit: 'day'
+                        unit: 'day' // Change as needed (e.g., 'hour', 'minute')
                     },
                     title: {
                         display: true,
@@ -942,6 +932,9 @@ function getRandomColor() {
     }
     return color;
 }
+
+
+
 
 
 
