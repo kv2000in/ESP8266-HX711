@@ -144,6 +144,8 @@ Server returns data as
         Show Battery
     </label>
 </div>
+<input type="file" id="upload-files" multiple accept=".txt">
+<button id="process-files">Process Files</button>
 </body>
 
 <script>
@@ -998,6 +1000,146 @@ function plotData(paramMacAddr) {
 
 
 
+// Function to process uploaded CSV files
+document.getElementById('process-files').addEventListener('click', () => {
+    const files = document.getElementById('upload-files').files;
+    const allData = [];
+    let macAddrSet = new Set();
+
+    if (files.length === 0) {
+        console.error('No files selected');
+        return;
+    }
+
+    for (const file of files) {
+        const reader = new FileReader();
+
+        reader.onload = function(event) {
+            const content = event.target.result;
+            const lines = content.split('\n').filter(line => line.trim() !== '');
+
+            // Extract MAC address from filename
+            const macAddr = file.name.split(' ')[1].split('.')[0];
+            macAddrSet.add(macAddr);
+
+            const data = lines.slice(1).map(line => { // Skip header
+                const [timestamp, reading, battery] = line.split(',');
+                return { timestamp, reading: parseFloat(reading), battery: parseFloat(battery) };
+            });
+
+            allData.push({ macAddr, data });
+
+            if (allData.length === files.length) {
+                const commonMacAddr = [...macAddrSet][0];
+                if (macAddrSet.size === 1) {
+                    plotuploadedData(allData.filter(d => d.macAddr === commonMacAddr).flatMap(d => d.data));
+                } else {
+                    console.error('MAC addresses do not match in all files');
+                }
+            }
+        };
+
+        reader.readAsText(file);
+    }
+});
+
+// Function to plot data from uploaded files
+function plotuploadedData(data) {
+    const ctx = document.getElementById('data-chart').getContext('2d');
+
+    // Destroy existing chart if it exists
+    if (myChart) {
+        myChart.destroy();
+    }
+
+    // Process data
+    const readingDataPoints = data.map(row => ({
+        x: new Date(row.timestamp),
+        y: row.reading
+    }));
+
+    const batteryDataPoints = data.map(row => ({
+        x: new Date(row.timestamp),
+        y: row.battery
+    }));
+
+    // Create new chart
+    myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [
+                {
+                    label: 'Reading',
+                    data: readingDataPoints,
+                    borderColor: 'blue',
+                    fill: false,
+                    hidden: !document.getElementById('toggle-reading').checked
+                },
+                {
+                    label: 'Battery',
+                    data: batteryDataPoints,
+                    borderColor: 'red',
+                    fill: false,
+                    hidden: !document.getElementById('toggle-battery').checked
+                }
+            ]
+        },
+        options: {
+            plugins: {
+                zoom: {
+                    zoom: {
+                        wheel: {
+                            enabled: true
+                        },
+                        pinch: {
+                            enabled: true
+                        },
+                        mode: 'xy'
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'xy'
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'minute'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Timestamp'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Value'
+                    },
+                    suggestedMin: Math.min(
+                        ...data.map(d => Math.min(d.reading, d.battery))
+                    ),
+                    suggestedMax: Math.max(
+                        ...data.map(d => Math.max(d.reading, d.battery))
+                    )
+                }
+            }
+        }
+    });
+
+    // Event listeners to toggle datasets
+    document.getElementById('toggle-reading').addEventListener('change', function() {
+        myChart.data.datasets[0].hidden = !this.checked; // Toggle Reading dataset
+        myChart.update(); // Refresh the chart
+    });
+
+    document.getElementById('toggle-battery').addEventListener('change', function() {
+        myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
+        myChart.update(); // Refresh the chart
+    });
+}
 
 
 
