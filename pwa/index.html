@@ -1207,16 +1207,7 @@ function plotData(paramMacAddr) {
     // Initial update of Y-axis range
     updateYAxisRange();
 
-    // Event listeners to toggle datasets
-    document.getElementById('toggle-reading').addEventListener('change', function() {
-        myChart.data.datasets[0].hidden = !this.checked; // Toggle Reading dataset
-        myChart.update(); // Refresh the chart
-    });
-
-    document.getElementById('toggle-battery').addEventListener('change', function() {
-        myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
-        myChart.update(); // Refresh the chart
-    });
+    
 }
 
 
@@ -1293,7 +1284,7 @@ function plotuploadedData(data, title) {
         myChart.destroy();
     }
 
-    // Create new chart
+      // Create new chart
     myChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -1302,15 +1293,13 @@ function plotuploadedData(data, title) {
                     label: 'Reading',
                     data: readingDataPoints,
                     borderColor: 'blue',
-                    fill: false,
-                    hidden: !document.getElementById('toggle-reading').checked
+                    fill: false
                 },
                 {
                     label: 'Battery',
                     data: batteryDataPoints,
                     borderColor: 'red',
-                    fill: false,
-                    hidden: !document.getElementById('toggle-battery').checked
+                    fill: false
                 }
             ]
         },
@@ -1318,8 +1307,9 @@ function plotuploadedData(data, title) {
             plugins: {
                 title: {
                     display: true,
-                    text: title || 'Reading and Battery Data'
+                    text: title
                 },
+
                 zoom: {
                     zoom: {
                         wheel: {
@@ -1340,9 +1330,14 @@ function plotuploadedData(data, title) {
                         // Toggle the visibility of the dataset
                         const index = legendItem.index;
                         const meta = legend.chart.getDatasetMeta(index);
-                        meta.hidden = meta.hidden === null ? !legend.chart.data.datasets[index].hidden : null;
-                        legend.chart.update();
-                        updateYAxisRange(); // Update Y-axis range based on visible datasets
+
+                        if (meta) {
+                            meta.hidden = meta.hidden === null ? !legend.chart.data.datasets[index].hidden : null;
+                            legend.chart.update();
+
+                            // Update Y-axis range after toggling
+                            updateYAxisRange();
+                        }
                     }
                 }
             },
@@ -1373,20 +1368,6 @@ function plotuploadedData(data, title) {
         }
     });
 
-    // Initial update of Y-axis range
-    updateYAxisRange();
-
-    // Event listeners to toggle datasets
-    document.getElementById('toggle-reading').addEventListener('change', function() {
-        myChart.data.datasets[0].hidden = !this.checked; // Toggle Reading dataset
-        myChart.update(); // Refresh the chart
-    });
-
-    document.getElementById('toggle-battery').addEventListener('change', function() {
-        myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
-        myChart.update(); // Refresh the chart
-    });
-
     // Function to update the Y-axis range based on the visible datasets
     function updateYAxisRange() {
         const visibleDatasets = myChart.data.datasets.filter(dataset => !dataset.hidden);
@@ -1400,6 +1381,9 @@ function plotuploadedData(data, title) {
         myChart.options.scales.y.suggestedMax = maxY;
         myChart.update(); // Refresh the chart after updating the axis range
     }
+
+    // Initial update of Y-axis range
+    updateYAxisRange();
 }
 
 
