@@ -1079,7 +1079,7 @@ function exportAllData() {
    
 // Global variable to store the chart instance
 let myChart;
-    
+
 // Function to plot data
 function plotData(paramMacAddr) {
     const ctx = document.getElementById('data-chart').getContext('2d');
@@ -1129,9 +1129,9 @@ function plotData(paramMacAddr) {
             plugins: {
                 title: {
                     display: true,
-                    text: document.getElementById('nameinput'+paramMacAddr).value
+                    text: document.getElementById('nameinput' + paramMacAddr).value
                 },
-
+         
                 zoom: {
                     zoom: {
                         wheel: {
@@ -1151,14 +1151,23 @@ function plotData(paramMacAddr) {
                     onClick: (event, legendItem, legend) => {
                         // Toggle the visibility of the dataset
                         const index = legendItem.index;
-                        const meta = legend.chart.getDatasetMeta(index);
-
-                        if (meta) {
-                            meta.hidden = meta.hidden === null ? !legend.chart.data.datasets[index].hidden : null;
-                            legend.chart.update();
-
-                            // Update Y-axis range after toggling
-                            updateYAxisRange();
+                        const dataset = legend.chart.data.datasets[index];
+                        
+                        if (dataset) {
+                            const meta = legend.chart.getDatasetMeta(index);
+                            
+                            if (meta) {
+                                // Toggle the visibility
+                                meta.hidden = meta.hidden === null ? !dataset.hidden : null;
+                                legend.chart.update();
+                                
+                                // Update Y-axis range after toggling
+                                updateYAxisRange();
+                            } else {
+                                console.error('Dataset meta is undefined');
+                            }
+                        } else {
+                            console.error('Dataset is undefined at index:', index);
                         }
                     }
                 }
@@ -1207,8 +1216,9 @@ function plotData(paramMacAddr) {
     // Initial update of Y-axis range
     updateYAxisRange();
 
-    
+
 }
+
 
 
 
@@ -1283,8 +1293,7 @@ function plotuploadedData(data, title) {
     if (myChart) {
         myChart.destroy();
     }
-
-      // Create new chart
+     // Create new chart
     myChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -1307,9 +1316,9 @@ function plotuploadedData(data, title) {
             plugins: {
                 title: {
                     display: true,
-                    text: title
+                    text: document.getElementById('nameinput' + paramMacAddr).value
                 },
-
+         
                 zoom: {
                     zoom: {
                         wheel: {
@@ -1329,14 +1338,23 @@ function plotuploadedData(data, title) {
                     onClick: (event, legendItem, legend) => {
                         // Toggle the visibility of the dataset
                         const index = legendItem.index;
-                        const meta = legend.chart.getDatasetMeta(index);
-
-                        if (meta) {
-                            meta.hidden = meta.hidden === null ? !legend.chart.data.datasets[index].hidden : null;
-                            legend.chart.update();
-
-                            // Update Y-axis range after toggling
-                            updateYAxisRange();
+                        const dataset = legend.chart.data.datasets[index];
+                        
+                        if (dataset) {
+                            const meta = legend.chart.getDatasetMeta(index);
+                            
+                            if (meta) {
+                                // Toggle the visibility
+                                meta.hidden = meta.hidden === null ? !dataset.hidden : null;
+                                legend.chart.update();
+                                
+                                // Update Y-axis range after toggling
+                                updateYAxisRange();
+                            } else {
+                                console.error('Dataset meta is undefined');
+                            }
+                        } else {
+                            console.error('Dataset is undefined at index:', index);
                         }
                     }
                 }
@@ -1384,6 +1402,9 @@ function plotuploadedData(data, title) {
 
     // Initial update of Y-axis range
     updateYAxisRange();
+
+
+
 }
 
 
