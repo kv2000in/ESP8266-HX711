@@ -1036,7 +1036,7 @@ const blob = new Blob([text], { type: 'text/plain' });
 const url = URL.createObjectURL(blob);
 const a = document.createElement('a');
 a.href = url;
-a.download = getCurrentLocalTime()+paramMacAddr+'.txt';
+a.download = paramMacAddr +'_'+getCurrentLocalTime() + '.txt';
 a.click();
 URL.revokeObjectURL(url);
 } 
@@ -1057,7 +1057,7 @@ csv += `${eachDataRow.timestamp},${eachDataRow.reading},${eachDataRow.battery}\n
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = paramMacAddr + getCurrentLocalTime() + '.csv';
+    a.download = paramMacAddr +'_'+getCurrentLocalTime() + '.csv';
     document.body.appendChild(a); // Required for Firefox
     a.click();
     document.body.removeChild(a); // Clean up
@@ -1076,11 +1076,10 @@ function exportAllData() {
         }
     });
 }        
-        
+   
 // Global variable to store the chart instance
 let myChart;
-
-
+    
 // Function to plot data
 function plotData(paramMacAddr) {
     const ctx = document.getElementById('data-chart').getContext('2d');
@@ -1132,6 +1131,7 @@ function plotData(paramMacAddr) {
                     display: true,
                     text: document.getElementById('nameinput'+paramMacAddr).value
                 },
+
                 zoom: {
                     zoom: {
                         wheel: {
@@ -1152,8 +1152,14 @@ function plotData(paramMacAddr) {
                         // Toggle the visibility of the dataset
                         const index = legendItem.index;
                         const meta = legend.chart.getDatasetMeta(index);
-                        meta.hidden = meta.hidden === null ? !legend.chart.data.datasets[index].hidden : null;
-                        legend.chart.update();
+
+                        if (meta) {
+                            meta.hidden = meta.hidden === null ? !legend.chart.data.datasets[index].hidden : null;
+                            legend.chart.update();
+
+                            // Update Y-axis range after toggling
+                            updateYAxisRange();
+                        }
                     }
                 }
             },
@@ -1195,11 +1201,24 @@ function plotData(paramMacAddr) {
 
         myChart.options.scales.y.suggestedMin = minY;
         myChart.options.scales.y.suggestedMax = maxY;
+        myChart.update(); // Refresh the chart after updating the axis range
     }
 
     // Initial update of Y-axis range
     updateYAxisRange();
+
+    // Event listeners to toggle datasets
+    document.getElementById('toggle-reading').addEventListener('change', function() {
+        myChart.data.datasets[0].hidden = !this.checked; // Toggle Reading dataset
+        myChart.update(); // Refresh the chart
+    });
+
+    document.getElementById('toggle-battery').addEventListener('change', function() {
+        myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
+        myChart.update(); // Refresh the chart
+    });
 }
+
 
 
 
@@ -1224,7 +1243,7 @@ document.getElementById('process-files').addEventListener('click', () => {
             const lines = content.split('\n').filter(line => line.trim() !== '');
 
             // Extract MAC address from filename
-            const macAddr = file.name.split(' ')[1].split('.')[0];
+            const macAddr = file.name.split('_')[0];;
             macAddrSet.add(macAddr);
 
             const data = lines.slice(1).map(line => { // Skip header
