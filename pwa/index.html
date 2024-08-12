@@ -143,16 +143,7 @@ Server returns data as
 <datalist id="availablesensors">
 </datalist>
 <canvas id="data-chart" width="400" height="200"></canvas>
-<div>
-    <label>
-        <input type="checkbox" id="toggle-reading" checked>
-        Show Reading
-    </label>
-    <label>
-        <input type="checkbox" id="toggle-battery" checked>
-        Show Battery
-    </label>
-</div>
+
 <input type="file" id="upload-files" multiple accept=".txt">
 <button id="process-files">Process Files</button>
 </body>
@@ -1066,7 +1057,7 @@ csv += `${eachDataRow.timestamp},${eachDataRow.reading},${eachDataRow.battery}\n
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = getCurrentLocalTime() + paramMacAddr + '.csv';
+    a.download = paramMacAddr + getCurrentLocalTime() + '.csv';
     document.body.appendChild(a); // Required for Firefox
     a.click();
     document.body.removeChild(a); // Clean up
@@ -1088,6 +1079,7 @@ function exportAllData() {
         
 // Global variable to store the chart instance
 let myChart;
+
 
 // Function to plot data
 function plotData(paramMacAddr) {
@@ -1124,20 +1116,22 @@ function plotData(paramMacAddr) {
                     label: 'Reading',
                     data: readingDataPoints,
                     borderColor: 'blue',
-                    fill: false,
-                    hidden: !document.getElementById('toggle-reading').checked
+                    fill: false
                 },
                 {
                     label: 'Battery',
                     data: batteryDataPoints,
                     borderColor: 'red',
-                    fill: false,
-                    hidden: !document.getElementById('toggle-battery').checked
+                    fill: false
                 }
             ]
         },
         options: {
             plugins: {
+                title: {
+                    display: true,
+                    text: document.getElementById('nameinput'+paramMacAddr).value
+                },
                 zoom: {
                     zoom: {
                         wheel: {
@@ -1151,6 +1145,15 @@ function plotData(paramMacAddr) {
                     pan: {
                         enabled: true,
                         mode: 'xy' // Pan on both axes
+                    }
+                },
+                legend: {
+                    onClick: (event, legendItem, legend) => {
+                        // Toggle the visibility of the dataset
+                        const index = legendItem.index;
+                        const meta = legend.chart.getDatasetMeta(index);
+                        meta.hidden = meta.hidden === null ? !legend.chart.data.datasets[index].hidden : null;
+                        legend.chart.update();
                     }
                 }
             },
@@ -1170,24 +1173,35 @@ function plotData(paramMacAddr) {
                         display: true,
                         text: 'Value'
                     },
-                    suggestedMin: Math.min(...myReadings[paramMacAddr].map(d => Math.min(d.reading, d.battery))),
-                    suggestedMax: Math.max(...myReadings[paramMacAddr].map(d => Math.max(d.reading, d.battery)))
+                    // Adjust min and max dynamically based on the visible datasets
+                    ticks: {
+                        callback: function(value) {
+                            return value.toFixed(2); // Optional: format the y-axis labels
+                        }
+                    }
                 }
             }
         }
     });
 
-    // Event listeners to toggle datasets
-    document.getElementById('toggle-reading').addEventListener('change', function() {
-        myChart.data.datasets[0].hidden = !this.checked; // Toggle Reading dataset
-        myChart.update(); // Refresh the chart
-    });
+    // Function to update the Y-axis range based on the visible datasets
+    function updateYAxisRange() {
+        const visibleDatasets = myChart.data.datasets.filter(dataset => !dataset.hidden);
+        if (visibleDatasets.length === 0) return; // No visible datasets, do nothing
 
-    document.getElementById('toggle-battery').addEventListener('change', function() {
-        myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
-        myChart.update(); // Refresh the chart
-    });
+        const yValues = visibleDatasets.flatMap(dataset => dataset.data.map(point => point.y));
+        const minY = Math.min(...yValues);
+        const maxY = Math.max(...yValues);
+
+        myChart.options.scales.y.suggestedMin = minY;
+        myChart.options.scales.y.suggestedMax = maxY;
+    }
+
+    // Initial update of Y-axis range
+    updateYAxisRange();
 }
+
+
 
 
 
@@ -1223,9 +1237,11 @@ document.getElementById('process-files').addEventListener('click', () => {
             if (allData.length === files.length) {
                 const commonMacAddr = [...macAddrSet][0];
                 if (macAddrSet.size === 1) {
-                    plotuploadedData(allData.filter(d => d.macAddr === commonMacAddr).flatMap(d => d.data));
+                    plotuploadedData(allData.filter(d => d.macAddr === commonMacAddr).flatMap(d => d.data),commonMacAddr);
                 } else {
                     console.error('MAC addresses do not match in all files');
+														  console.log(commonMacAddr);
+														  console.log([...macAddrSet][1]);
                 }
             }
         };
@@ -1234,25 +1250,29 @@ document.getElementById('process-files').addEventListener('click', () => {
     }
 });
 
-// Function to plot data from uploaded files
-function plotuploadedData(data) {
+
+
+
+
+// Function to plot data
+function plotuploadedData(data, title) {
     const ctx = document.getElementById('data-chart').getContext('2d');
+
+    // Process data points
+    const readingDataPoints = data.map(eachDataRow => ({
+        x: new Date(eachDataRow.timestamp),
+        y: eachDataRow.reading
+    }));
+
+    const batteryDataPoints = data.map(eachDataRow => ({
+        x: new Date(eachDataRow.timestamp),
+        y: eachDataRow.battery
+    }));
 
     // Destroy existing chart if it exists
     if (myChart) {
         myChart.destroy();
     }
-
-    // Process data
-    const readingDataPoints = data.map(row => ({
-        x: new Date(row.timestamp),
-        y: row.reading
-    }));
-
-    const batteryDataPoints = data.map(row => ({
-        x: new Date(row.timestamp),
-        y: row.battery
-    }));
 
     // Create new chart
     myChart = new Chart(ctx, {
@@ -1277,19 +1297,33 @@ function plotuploadedData(data) {
         },
         options: {
             plugins: {
+                title: {
+                    display: true,
+                    text: title || 'Reading and Battery Data'
+                },
                 zoom: {
                     zoom: {
                         wheel: {
-                            enabled: true
+                            enabled: true // Enable zoom with the mouse wheel
                         },
                         pinch: {
-                            enabled: true
+                            enabled: true // Enable zoom with pinch gestures
                         },
-                        mode: 'xy'
+                        mode: 'xy' // Zoom on both axes
                     },
                     pan: {
                         enabled: true,
-                        mode: 'xy'
+                        mode: 'xy' // Pan on both axes
+                    }
+                },
+                legend: {
+                    onClick: (event, legendItem, legend) => {
+                        // Toggle the visibility of the dataset
+                        const index = legendItem.index;
+                        const meta = legend.chart.getDatasetMeta(index);
+                        meta.hidden = meta.hidden === null ? !legend.chart.data.datasets[index].hidden : null;
+                        legend.chart.update();
+                        updateYAxisRange(); // Update Y-axis range based on visible datasets
                     }
                 }
             },
@@ -1297,7 +1331,7 @@ function plotuploadedData(data) {
                 x: {
                     type: 'time',
                     time: {
-                        unit: 'minute'
+                        unit: 'minute' // Adjust as needed
                     },
                     title: {
                         display: true,
@@ -1309,16 +1343,19 @@ function plotuploadedData(data) {
                         display: true,
                         text: 'Value'
                     },
-                    suggestedMin: Math.min(
-                        ...data.map(d => Math.min(d.reading, d.battery))
-                    ),
-                    suggestedMax: Math.max(
-                        ...data.map(d => Math.max(d.reading, d.battery))
-                    )
+                    // Adjust min and max dynamically based on the visible datasets
+                    ticks: {
+                        callback: function(value) {
+                            return value.toFixed(2); // Optional: format the y-axis labels
+                        }
+                    }
                 }
             }
         }
     });
+
+    // Initial update of Y-axis range
+    updateYAxisRange();
 
     // Event listeners to toggle datasets
     document.getElementById('toggle-reading').addEventListener('change', function() {
@@ -1330,8 +1367,21 @@ function plotuploadedData(data) {
         myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
         myChart.update(); // Refresh the chart
     });
-}
 
+    // Function to update the Y-axis range based on the visible datasets
+    function updateYAxisRange() {
+        const visibleDatasets = myChart.data.datasets.filter(dataset => !dataset.hidden);
+        if (visibleDatasets.length === 0) return; // No visible datasets, do nothing
+
+        const yValues = visibleDatasets.flatMap(dataset => dataset.data.map(point => point.y));
+        const minY = Math.min(...yValues);
+        const maxY = Math.max(...yValues);
+
+        myChart.options.scales.y.suggestedMin = minY;
+        myChart.options.scales.y.suggestedMax = maxY;
+        myChart.update(); // Refresh the chart after updating the axis range
+    }
+}
 
 
 
