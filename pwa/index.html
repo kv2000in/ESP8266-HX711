@@ -1229,11 +1229,13 @@ function plotData(paramMacAddr) {
         // Event listeners to toggle datasets
     document.getElementById('toggle-reading').addEventListener('change', function() {
         myChart.data.datasets[0].hidden = !this.checked; // Toggle Reading dataset
+         updateYAxisRange();
         myChart.update(); // Refresh the chart
     });
 
     document.getElementById('toggle-battery').addEventListener('change', function() {
         myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
+         updateYAxisRange();
         myChart.update(); // Refresh the chart
     });
 
@@ -1426,11 +1428,13 @@ function plotuploadedData(data, title) {
         // Event listeners to toggle datasets
     document.getElementById('toggle-reading').addEventListener('change', function() {
         myChart.data.datasets[0].hidden = !this.checked; // Toggle Reading dataset
+         updateYAxisRange();
         myChart.update(); // Refresh the chart
     });
 
     document.getElementById('toggle-battery').addEventListener('change', function() {
         myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
+         updateYAxisRange();
         myChart.update(); // Refresh the chart
     });
 
