@@ -1209,6 +1209,28 @@ function plotData(paramMacAddr) {
         }
     });
 
+
+
+    // Initial update of Y-axis range
+    updateYAxisRange();
+}
+
+        // Event listeners to toggle datasets
+    document.getElementById('toggle-reading').addEventListener('change', function() {
+        myChart.data.datasets[0].hidden = !this.checked; // Toggle Reading dataset
+         updateYAxisRange();
+        
+    });
+
+    document.getElementById('toggle-battery').addEventListener('change', function() {
+        myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
+         updateYAxisRange();
+        
+    });
+
+
+
+
     // Function to update the Y-axis range based on the visible datasets
     function updateYAxisRange() {
         const visibleDatasets = myChart.data.datasets.filter(dataset => !dataset.hidden);
@@ -1222,27 +1244,6 @@ function plotData(paramMacAddr) {
         myChart.options.scales.y.suggestedMax = maxY;
         myChart.update(); // Refresh the chart after updating the axis range
     }
-
-    // Initial update of Y-axis range
-    updateYAxisRange();
-
-        // Event listeners to toggle datasets
-    document.getElementById('toggle-reading').addEventListener('change', function() {
-        myChart.data.datasets[0].hidden = !this.checked; // Toggle Reading dataset
-         updateYAxisRange();
-        myChart.update(); // Refresh the chart
-    });
-
-    document.getElementById('toggle-battery').addEventListener('change', function() {
-        myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
-         updateYAxisRange();
-        myChart.update(); // Refresh the chart
-    });
-
-}
-
-
-
 
 
 
@@ -1408,35 +1409,10 @@ function plotuploadedData(data, title) {
         }
     });
 
-    // Function to update the Y-axis range based on the visible datasets
-    function updateYAxisRange() {
-        const visibleDatasets = myChart.data.datasets.filter(dataset => !dataset.hidden);
-        if (visibleDatasets.length === 0) return; // No visible datasets, do nothing
 
-        const yValues = visibleDatasets.flatMap(dataset => dataset.data.map(point => point.y));
-        const minY = Math.min(...yValues);
-        const maxY = Math.max(...yValues);
-
-        myChart.options.scales.y.suggestedMin = minY;
-        myChart.options.scales.y.suggestedMax = maxY;
-        myChart.update(); // Refresh the chart after updating the axis range
-    }
 
     // Initial update of Y-axis range
     updateYAxisRange();
-
-        // Event listeners to toggle datasets
-    document.getElementById('toggle-reading').addEventListener('change', function() {
-        myChart.data.datasets[0].hidden = !this.checked; // Toggle Reading dataset
-         updateYAxisRange();
-        myChart.update(); // Refresh the chart
-    });
-
-    document.getElementById('toggle-battery').addEventListener('change', function() {
-        myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
-         updateYAxisRange();
-        myChart.update(); // Refresh the chart
-    });
 
 }
 
