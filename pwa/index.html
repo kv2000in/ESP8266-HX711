@@ -143,6 +143,16 @@ Server returns data as
 <datalist id="availablesensors">
 </datalist>
 <canvas id="data-chart" width="400" height="200"></canvas>
+<div>
+    <label>
+        <input type="checkbox" id="toggle-reading" checked>
+        Show Reading
+    </label>
+    <label>
+        <input type="checkbox" id="toggle-battery" checked>
+        Show Battery
+    </label>
+</div>
 
 <input type="file" id="upload-files" multiple accept=".txt">
 <button id="process-files">Process Files</button>
@@ -1216,6 +1226,16 @@ function plotData(paramMacAddr) {
     // Initial update of Y-axis range
     updateYAxisRange();
 
+        // Event listeners to toggle datasets
+    document.getElementById('toggle-reading').addEventListener('change', function() {
+        myChart.data.datasets[0].hidden = !this.checked; // Toggle Reading dataset
+        myChart.update(); // Refresh the chart
+    });
+
+    document.getElementById('toggle-battery').addEventListener('change', function() {
+        myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
+        myChart.update(); // Refresh the chart
+    });
 
 }
 
@@ -1293,7 +1313,7 @@ function plotuploadedData(data, title) {
     if (myChart) {
         myChart.destroy();
     }
-     // Create new chart
+      // Create new chart
     myChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -1403,7 +1423,16 @@ function plotuploadedData(data, title) {
     // Initial update of Y-axis range
     updateYAxisRange();
 
+        // Event listeners to toggle datasets
+    document.getElementById('toggle-reading').addEventListener('change', function() {
+        myChart.data.datasets[0].hidden = !this.checked; // Toggle Reading dataset
+        myChart.update(); // Refresh the chart
+    });
 
+    document.getElementById('toggle-battery').addEventListener('change', function() {
+        myChart.data.datasets[1].hidden = !this.checked; // Toggle Battery dataset
+        myChart.update(); // Refresh the chart
+    });
 
 }
 
